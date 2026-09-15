@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Theme tokens — defined as raw RGB triplets so Tailwind's
+  `rgb(var(--token) / <alpha-value>)` syntax works for opacity modifiers.
+  Light theme is the default; `.dark` overrides below.
+*/
+@layer base {
+  :root {
+    --color-surface: 247 248 250;          /* page background */
+    --color-surface-2: 241 243 246;        /* secondary surface */
+    --color-elevated: 255 255 255;         /* elevated panels / headers */
+    --color-card: 255 255 255;             /* card background */
+    --color-card-hover: 248 250 252;       /* card hover background */
+    --color-input: 255 255 255;            /* input background */
+    --color-border: 229 231 235;           /* default border */
+    --color-border-strong: 209 213 219;   /* stronger border */
+    --color-content: 17 24 39;             /* primary text */
+    --color-muted: 75 85 99;              /* secondary text */
+    --color-subtle: 107 114 128;           /* tertiary text */
+    --color-scrollbar-track: 241 243 246;
+    --color-scrollbar-thumb: 203 213 225;
+  }
+
+  .dark {
+    --color-surface: 3 7 18;              /* gray-950 */
+    --color-surface-2: 17 24 39;           /* gray-900 */
+    --color-elevated: 3 7 18;             /* gray-950 */
+    --color-card: 17 24 39;               /* gray-900 */
+    --color-card-hover: 31 41 55;         /* gray-800 */
+    --color-input: 17 24 39;              /* gray-900 */
+    --color-border: 31 41 55;             /* gray-800 */
+    --color-border-strong: 55 65 81;      /* gray-700 */
+    --color-content: 243 244 246;          /* gray-100 */
+    --color-muted: 156 163 175;           /* gray-400 */
+    --color-subtle: 107 114 128;           /* gray-500 */
+    --color-scrollbar-track: 17 24 39;
+    --color-scrollbar-thumb: 55 65 81;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-surface text-content antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: rgb(var(--color-scrollbar-track));
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--color-scrollbar-thumb));
+    @apply rounded;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-brand-600;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/20;
+  }
+  .btn-secondary {
+    @apply btn bg-card hover:bg-card-hover text-content border border-border-strong;
+  }
+  .btn-ghost {
+    @apply btn hover:bg-surface-2 text-muted hover:text-content;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 hover:bg-red-700 text-white;
+  }
+  .card {
+    @apply bg-card border border-border rounded-xl shadow-lg;
+  }
+  .input {
+    @apply w-full px-4 py-2.5 bg-input border border-border-strong rounded-lg text-content placeholder-subtle focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all;
+  }
+  .label {
+    @apply block text-sm font-medium text-muted mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-beginner { @apply badge bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/20; }
+  .badge-intermediate { @apply badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20; }
+  .badge-advanced { @apply badge bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/20; }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted hover:text-content hover:bg-surface-2 transition-all duration-200;
+  }
+  .sidebar-link-active {
+    @apply sidebar-link bg-brand-600/15 text-brand-600 dark:text-brand-400 border-l-2 border-brand-500;
+  }
+}
