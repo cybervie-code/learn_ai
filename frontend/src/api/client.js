@@ -39,6 +39,10 @@ export const api = {
   googleLogin: (idToken) => client.post('/auth/google', { idToken }),
   login: (email, password) => client.post('/auth/login', { email, password }),
   register: (data) => client.post('/auth/register', data),
+  verifyEmail: (email, otp) => client.post('/auth/verify-email', { email, otp }),
+  resendOtp: (email, purpose) => client.post('/auth/resend-otp', { email, purpose }),
+  forgotPassword: (email) => client.post('/auth/forgot-password', { email }),
+  resetPassword: (email, otp, newPassword) => client.post('/auth/reset-password', { email, otp, newPassword }),
   getMe: () => client.get('/auth/me'),
 
   // Colleges

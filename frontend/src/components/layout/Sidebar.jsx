@@ -4,6 +4,7 @@ import {
   Building2, FileQuestion, ClipboardList, Users, ShieldCheck, GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+import BrandLogo from '../BrandLogo.jsx';
 
 export default function Sidebar() {
   const { user } = useAuth();
@@ -49,7 +50,7 @@ export default function Sidebar() {
     <aside className="w-64 bg-surface border-r border-border flex flex-col h-screen sticky top-0">
       <div className="p-5 border-b border-border">
         <NavLink to="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center font-bold text-white text-lg">C</div>
+          <BrandLogo />
           <div>
             <div className="font-bold text-lg text-content leading-tight">Cybervie</div>
             <div className="text-xs text-subtle">AI & Cyber Learning</div>

@@ -4,6 +4,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { User } from '../models/User.js';
 import { College } from '../models/College.js';
 import { ApiError } from '../utils/ApiError.js';
+import { requestOtp, verifyOtp } from './otpService.js';
 
 function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, {
@@ -83,6 +84,7 @@ export async function googleLogin(idToken) {
       user.externalIdentities.push(googleIdentity);
     }
     if (!user.avatarUrl && avatarUrl) user.avatarUrl = avatarUrl;
+    user.emailVerified = true;
     if (user.status === 'invited') user.status = 'active';
     user.lastLoginAt = new Date();
     await user.save();
@@ -119,6 +121,7 @@ export async function googleLogin(idToken) {
     role: 'student',
     college: college ? college._id : null,
     status: 'active',
+    emailVerified: true,
     externalIdentities: [googleIdentity],
     lastLoginAt: new Date(),
   });
@@ -127,21 +130,56 @@ export async function googleLogin(idToken) {
   return { user, token: signToken(user._id) };
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 8;
+
+function validateCredentialsInput(email, password, name = null) {
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    throw ApiError.badRequest('Invalid email or password format');
+  }
+  if (!EMAIL_RE.test(email)) {
+    throw ApiError.badRequest('Please provide a valid email address');
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw ApiError.badRequest(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+  if (name !== null && (typeof name !== 'string' || name.trim().length < 2)) {
+    throw ApiError.badRequest('Please provide your full name');
+  }
+}
+
 /**
- * Email/password login (for superadmin, content authors, dev mode)
+ * Find a verified college matching the given email domain.
+ */
+async function findCollegeByEmailDomain(email) {
+  const emailDomain = email.split('@')[1];
+  const freeProviders = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'];
+  if (!emailDomain || freeProviders.includes(emailDomain)) return null;
+  return College.findOne({
+    'domains.domain': emailDomain,
+    'domains.verified': true,
+  });
+}
+
+/**
+ * Email/password login. Verifies the password first, then checks account state
+ * so we never reveal account status to someone without the right password.
  */
 export async function emailLogin(email, password) {
-  // Input type validation - prevent NoSQL injection via object payloads
   if (typeof email !== 'string' || typeof password !== 'string') {
     throw ApiError.badRequest('Invalid email or password format');
   }
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
   if (!user) throw ApiError.unauthorized('Invalid credentials');
-  if (user.status !== 'active') throw ApiError.forbidden('Account is not active');
   if (!user.password) throw ApiError.unauthorized('Please use Google sign-in');
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw ApiError.unauthorized('Invalid credentials');
+
+  if (!user.emailVerified && user.status === 'invited') {
+    throw ApiError.forbidden('Please verify your email to continue', { requiresVerification: true });
+  }
+  if (user.status !== 'active') throw ApiError.forbidden('Account is not active');
 
   user.lastLoginAt = new Date();
   await user.save();
@@ -153,26 +191,123 @@ export async function emailLogin(email, password) {
 }
 
 /**
- * Register with email/password (superadmin seed or platform staff)
+ * Register with email/password. Creates an unverified account and sends an OTP.
+ * The account becomes active only after OTP verification.
  */
-export async function emailRegister({ email, password, name, platformRole }) {
-  const existing = await User.findOne({ email: email.toLowerCase() });
-  if (existing) throw ApiError.conflict('Email already registered');
+export async function emailRegister({ email, password, name }) {
+  validateCredentialsInput(email, password, name);
+  const normalizedEmail = email.toLowerCase();
 
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
+  const college = await findCollegeByEmailDomain(normalizedEmail);
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const existing = await User.findOne({ email: normalizedEmail });
+  if (existing) {
+    if (existing.emailVerified) {
+      throw ApiError.conflict('Email already registered. Please sign in.');
+    }
+    if (existing.status === 'suspended' || existing.status === 'deactivated') {
+      throw ApiError.forbidden('This account is not active. Please contact support.');
+    }
+    // Unverified account re-registering - update details and resend OTP
+    existing.name = name.trim();
+    existing.password = hashedPassword;
+    await existing.save();
+    await requestOtp(normalizedEmail, 'verify-email');
+    return { requiresVerification: true, email: normalizedEmail };
+  }
 
   const user = new User({
-    email: email.toLowerCase(),
-    name,
+    email: normalizedEmail,
+    name: name.trim(),
     password: hashedPassword,
-    platformRole: platformRole || null,
     role: 'student',
-    status: 'active',
+    college: college ? college._id : null,
+    status: 'invited',
+    emailVerified: false,
   });
 
   await user.save();
+  await requestOtp(normalizedEmail, 'verify-email');
+
+  return { requiresVerification: true, email: normalizedEmail };
+}
+
+/**
+ * Verify the signup OTP. Activates the account and returns a session token.
+ */
+export async function verifyEmailOtp(email, otp) {
+  if (typeof email !== 'string' || typeof otp !== 'string') {
+    throw ApiError.badRequest('Email and code are required');
+  }
+  const normalizedEmail = email.toLowerCase();
+
+  await verifyOtp(normalizedEmail, otp, 'verify-email');
+
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) throw ApiError.badRequest('Account not found. Please register again.');
+
+  user.emailVerified = true;
+  if (user.status === 'invited') user.status = 'active';
+  user.lastLoginAt = new Date();
+  await user.save();
+
   return { user, token: signToken(user._id) };
+}
+
+/**
+ * Resend an OTP. For reset-password we silently succeed for unknown emails
+ * to avoid account enumeration.
+ */
+export async function resendOtp(email, purpose) {
+  if (typeof email !== 'string') throw ApiError.badRequest('Email is required');
+  if (!['verify-email', 'reset-password'].includes(purpose)) {
+    throw ApiError.badRequest('Invalid purpose');
+  }
+  const normalizedEmail = email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+
+  if (purpose === 'verify-email') {
+    if (!user) throw ApiError.badRequest('No account found. Please register first.');
+    if (user.emailVerified) throw ApiError.badRequest('Email is already verified. Please sign in.');
+  } else if (!user) {
+    return; // silent success
+  }
+
+  await requestOtp(normalizedEmail, purpose);
+}
+
+/**
+ * Start the forgot-password flow. Always succeeds silently for unknown emails.
+ */
+export async function forgotPassword(email) {
+  if (typeof email !== 'string' || !EMAIL_RE.test(email)) {
+    throw ApiError.badRequest('Please provide a valid email address');
+  }
+  const normalizedEmail = email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) return; // silent success - do not reveal whether the email exists
+
+  await requestOtp(normalizedEmail, 'reset-password');
+}
+
+/**
+ * Reset password using a valid reset OTP. Verifying the code also proves
+ * mailbox ownership, so the email is marked verified.
+ */
+export async function resetPassword(email, otp, newPassword) {
+  validateCredentialsInput(email, newPassword);
+  const normalizedEmail = email.toLowerCase();
+
+  await verifyOtp(normalizedEmail, otp, 'reset-password');
+
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) throw ApiError.badRequest('Account not found');
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  user.emailVerified = true;
+  if (user.status === 'invited') user.status = 'active';
+  await user.save();
 }
 
 export { signToken };

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { Menu } from 'lucide-react';
 import { useState } from 'react';
 import ThemeToggle from '../ThemeToggle.jsx';
+import BrandLogo from '../BrandLogo.jsx';
 
 export default function PublicLayout() {
   const { user } = useAuth();
@@ -13,7 +14,7 @@ export default function PublicLayout() {
       <header className="sticky top-0 z-50 border-b border-border bg-elevated/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center font-bold text-white text-lg">C</div>
+            <BrandLogo />
             <span className="font-bold text-xl text-content">Cybervie</span>
           </Link>
 

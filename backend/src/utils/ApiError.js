@@ -11,12 +11,12 @@ export class ApiError extends Error {
     return new ApiError(400, message, details);
   }
 
-  static unauthorized(message = 'Unauthorized') {
-    return new ApiError(401, message);
+  static unauthorized(message = 'Unauthorized', details = null) {
+    return new ApiError(401, message, details);
   }
 
-  static forbidden(message = 'Forbidden') {
-    return new ApiError(403, message);
+  static forbidden(message = 'Forbidden', details = null) {
+    return new ApiError(403, message, details);
   }
 
   static notFound(message = 'Not Found') {

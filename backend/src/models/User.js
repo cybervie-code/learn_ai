@@ -16,6 +16,7 @@ const userSchema = new Schema({
   name: { type: String, required: true, trim: true, maxlength: 120 },
   avatarUrl: { type: String, default: '' },
   password: { type: String, select: false }, // only for email/password accounts
+  emailVerified: { type: Boolean, default: false },
 
   // External identities (Google sub, etc.)
   externalIdentities: [externalIdentitySchema],
