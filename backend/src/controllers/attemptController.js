@@ -6,6 +6,7 @@ import { AuditLog } from '../models/AuditLog.js';
 import { sendSuccess } from '../utils/sendResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
+import { quizLock } from '../utils/sequenceGate.js';
 
 // Helper: shuffle array
 function shuffle(arr) {
@@ -85,7 +86,13 @@ export const startAttempt = asyncHandler(async (req, res) => {
   if (!quiz) throw ApiError.notFound('Quiz not found');
   if (!quiz.isPublished) throw ApiError.badRequest('Quiz is not published');
 
-  // Resume an in-progress attempt first — before the max-attempts check,
+  // Sequential gating — path checkpoints unlock in lesson order, and a
+  // path's final assessment unlocks only after every checkpoint is passed.
+  // Checked before resume so a stale in-progress attempt can't bypass it.
+  const gate = await quizLock(quiz, req.user._id);
+  if (gate.locked) throw new ApiError(423, gate.reason);
+
+  // Resume an in-progress attempt — before the max-attempts check,
   // so a resumed attempt doesn't get rejected as a "new" attempt
   const existingInProgress = await Attempt.findOne({
     user: req.user._id,
@@ -397,7 +404,17 @@ export const getMyAttempts = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(Number(limit))
-    .select('quiz quizTitle mode status percentage correctCount incorrectCount skippedCount totalPoints earnedPoints xpAwarded startedAt submittedAt');
+    .select('quiz quizTitle mode status percentage correctCount incorrectCount skippedCount totalPoints earnedPoints xpAwarded startedAt submittedAt responses.questionSnapshotIndex questionSnapshots.questionId')
+    .lean();
+
+  // Surface lightweight progress counts (for resume cards) without shipping
+  // the full snapshot/response payloads
+  for (const a of attempts) {
+    a.answeredCount = (a.responses || []).length;
+    a.totalQuestions = (a.questionSnapshots || []).length;
+    delete a.responses;
+    delete a.questionSnapshots;
+  }
 
   const total = await Attempt.countDocuments(query);
 

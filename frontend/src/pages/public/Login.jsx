@@ -244,7 +244,7 @@ export default function Login() {
           <span className="font-bold text-2xl text-content">Cybervie</span>
         </Link>
 
-        <div className="card p-8">
+        <div className="card p-6 sm:p-8">
           <h1 className="text-2xl font-bold text-content text-center mb-2">{titles[mode]}</h1>
           <p className="text-sm text-muted text-center mb-6">{subtitles[mode]}</p>
 

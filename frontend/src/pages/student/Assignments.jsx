@@ -29,7 +29,7 @@ export default function Assignments() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-content flex items-center gap-2">
             <ClipboardList size={24} className="text-cyber-600 dark:text-cyber-400" /> Assignments
@@ -37,7 +37,7 @@ export default function Assignments() {
           <p className="text-muted mt-1">{isFaculty ? 'Create and track student assignments' : 'Your assigned quizzes and tasks'}</p>
         </div>
         {isFaculty && (
-          <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
+          <button onClick={() => setShowCreate(!showCreate)} className="btn-primary shrink-0">
             <Plus size={16} /> New Assignment
           </button>
         )}
@@ -59,7 +59,7 @@ export default function Assignments() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-content">{a.title}</h3>
                   {a.description && <p className="text-sm text-muted mt-1">{a.description}</p>}
-                  <div className="flex items-center gap-3 mt-3 text-xs text-subtle">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-subtle">
                     <span className="flex items-center gap-1"><Clock size={12} /> Due: {due.toLocaleDateString()}</span>
                     {a.cohorts?.length > 0 && <span className="flex items-center gap-1"><Users size={12} /> {a.cohorts.length} cohorts</span>}
                     <span>{a.quiz?.totalQuestions || 0} questions</span>

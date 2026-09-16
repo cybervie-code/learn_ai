@@ -67,7 +67,7 @@ export default function AdminLogin() {
             </span>
           </div>
 
-          <div className="p-8">
+          <div className="p-6 sm:p-8">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
                 <ShieldCheck size={20} className="text-indigo-400" />

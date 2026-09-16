@@ -445,8 +445,8 @@ async function seed() {
 
   // ---- Learning Path ----
   const path = await LearningPath.create({
-    title: 'AI Ready Student',
-    slug: 'ai-ready-student',
+    title: 'AI Mastery: The Complete Foundation',
+    slug: 'ai-mastery',
     description: 'Master the fundamentals of AI, understand how generative AI works, and learn to use AI responsibly. This is the foundation track for every B.Tech student.',
     track: 'foundation',
     difficulty: 'beginner',

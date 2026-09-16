@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import {
-  Clock, ArrowRight, ArrowLeft, BookOpen, Zap, Search,
-  CheckCircle2, Sparkles, Trophy, ChevronRight, Layers, Play,
+  Clock, ArrowRight, ArrowLeft, Zap,
+  CheckCircle2, Target, Layers, Play, BookOpen, Trophy, Lock,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const DIFFICULTIES = [
   { value: '', label: 'All levels' },
@@ -13,64 +14,75 @@ const DIFFICULTIES = [
   { value: 'advanced', label: 'Advanced' },
 ];
 
-const DIFF_COLOR = {
-  beginner: 'text-green-600 dark:text-green-400',
-  intermediate: 'text-yellow-600 dark:text-yellow-400',
-  advanced: 'text-red-600 dark:text-red-400',
-};
+/** Ordered lessons for a path, sorted by their stored order. */
+function lessonsOf(path) {
+  return (path?.missions || [])
+    .filter((m) => m.mission)
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function pathStats(path) {
+  const lessons = lessonsOf(path);
+  const total = path.progress?.totalMissions ?? lessons.length;
+  const done = path.progress?.completedMissions ?? lessons.filter((m) => m.completed).length;
+  const next = lessons.find((m) => !m.completed) || null;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const final = path.finalAssessment || null;
+  const finalPassed = Boolean(final?.passed);
+  const lessonsDone = total > 0 && done >= total;
+  return { lessons, total, done, next, pct, final, finalPassed, lessonsDone };
+}
 
 export default function Learn() {
   const { slug } = useParams();
   const [paths, setPaths] = useState([]);
   const [path, setPath] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [difficulty, setDifficulty] = useState('');
 
   useEffect(() => {
     setLoading(true);
-    if (slug) {
-      api.getPath(slug).then((res) => {
-        setPath(res.data.data);
-        setLoading(false);
-      }).catch(() => setLoading(false));
-    } else {
-      api.listPaths().then((res) => {
-        setPaths(res.data.data);
-        setLoading(false);
-      }).catch(() => setLoading(false));
-    }
+    const req = slug ? api.getPath(slug) : api.listPaths();
+    req.then((res) => {
+      if (slug) setPath(res.data.data);
+      else setPaths(res.data.data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [slug]);
 
-  const filtered = useMemo(() => paths.filter((p) => {
-    if (difficulty && p.difficulty !== difficulty) return false;
-    if (search && !`${p.title} ${p.description}`.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  }), [paths, search, difficulty]);
+  const filtered = useMemo(
+    () => paths.filter((p) => !difficulty || p.difficulty === difficulty),
+    [paths, difficulty]
+  );
 
-  const totals = useMemo(() => {
-    const totalMissions = paths.reduce((s, p) => s + (p.progress?.totalMissions ?? p.missions?.length ?? 0), 0);
-    const done = paths.reduce((s, p) => s + (p.progress?.completedMissions ?? 0), 0);
-    const pct = totalMissions ? Math.round((done / totalMissions) * 100) : 0;
-    return { totalMissions, done, pct };
+  // The journey continues on the first path with work in progress — including
+  // one whose lessons are done but whose final exam is still unpassed.
+  const resumePath = useMemo(() => {
+    const inProgress = paths.find((p) => {
+      const s = pathStats(p);
+      return (s.done > 0 && s.next) || (s.lessonsDone && s.final && !s.finalPassed);
+    });
+    if (inProgress) return inProgress;
+    const fresh = paths.find((p) => p.isFeatured && pathStats(p).next)
+      || paths.find((p) => pathStats(p).next);
+    return fresh || null;
   }, [paths]);
 
   if (loading) return <div className="text-subtle p-8">Loading...</div>;
 
   /* ================= Path detail ================= */
   if (slug && path) {
-    const missions = path.missions || [];
-    const done = missions.filter((m) => m.completed).length;
-    const pct = missions.length ? Math.round((done / missions.length) * 100) : 0;
-    const nextIdx = missions.findIndex((m) => !m.completed);
+    const { lessons, total, done, next, pct, final, finalPassed } = pathStats(path);
+    const nextIdx = lessons.findIndex((m) => !m.completed);
 
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-3xl mx-auto space-y-6">
         <Link to="/app/learn" className="text-sm text-muted hover:text-content flex items-center gap-1 w-fit">
-          <ArrowLeft size={14} /> All paths
+          <ArrowLeft size={14} /> Back to your journey
         </Link>
 
-        {/* Hero */}
+        {/* Path header */}
         <div className="card overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-brand-600 via-cyber-500 to-brand-600" />
           <div className="p-6 sm:p-8">
@@ -79,28 +91,20 @@ export default function Learn() {
                 {path.icon || '🧠'}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-bold text-content">{path.title}</h1>
-                  {path.isFeatured && (
-                    <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-xs">
-                      <Sparkles size={11} /> Featured
-                    </span>
-                  )}
-                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-content">{path.title}</h1>
                 <p className="text-muted mt-1.5 text-sm">{path.description}</p>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 text-xs text-subtle">
                   <span className="flex items-center gap-1.5"><Clock size={13} /> {path.estimatedHours}h total</span>
                   <span className={`badge-${path.difficulty}`}>{path.difficulty}</span>
-                  <span className="flex items-center gap-1.5"><Layers size={13} /> {missions.length} missions</span>
-                  {path.competencies?.length > 0 && <span>{path.competencies.length} competencies</span>}
+                  <span className="flex items-center gap-1.5"><Layers size={13} /> {total} lessons</span>
                 </div>
               </div>
             </div>
 
-            {missions.length > 0 && (
+            {total > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-subtle font-medium">{done} of {missions.length} completed</span>
+                  <span className="text-subtle font-medium">{done} of {total} lessons completed</span>
                   <span className="font-bold text-brand-600 dark:text-brand-400">{pct}%</span>
                 </div>
                 <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
@@ -111,213 +115,393 @@ export default function Learn() {
           </div>
         </div>
 
-        {/* Mission track */}
+        {/* Lesson track */}
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-semibold text-content text-sm uppercase tracking-wider">Missions</h2>
-            {nextIdx >= 0 && <span className="text-xs text-subtle">Next up: Mission {nextIdx + 1}</span>}
+            <h2 className="font-semibold text-content text-sm uppercase tracking-wider">Course track</h2>
+            {next ? (
+              <span className="text-xs text-subtle">Next up: Lesson {nextIdx + 1}</span>
+            ) : final && !finalPassed ? (
+              <span className="text-xs text-subtle">Next up: Final Assessment</span>
+            ) : null}
           </div>
-          <div className="divide-y divide-border/60">
-            {missions.map((m, i) => {
-              const mission = m.mission;
-              if (!mission) return null;
-              const completed = m.completed;
-              const isNext = !completed && i === nextIdx;
-              return (
-                <Link
-                  key={m._id || i}
-                  to={`/app/learn/mission/${mission.slug}`}
-                  className={`flex items-center gap-4 px-5 py-4 transition-colors group ${
-                    isNext ? 'bg-brand-500/5' : 'hover:bg-surface-2/40'
-                  }`}
-                >
-                  {/* Status indicator */}
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold border ${
-                    completed
-                      ? 'bg-green-500/15 border-green-500/30 text-green-600 dark:text-green-400'
-                      : isNext
-                      ? 'bg-brand-600 border-brand-600 text-white'
-                      : 'bg-surface-2 border-border-strong text-subtle'
-                  }`}>
-                    {completed ? <CheckCircle2 size={17} /> : i + 1}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className={`font-medium text-sm truncate ${completed ? 'text-muted' : 'text-content group-hover:text-brand-600 dark:group-hover:text-brand-400'} transition-colors`}>
-                        {mission.title}
-                      </h3>
-                      {isNext && <span className="badge bg-brand-500/15 text-brand-600 dark:text-brand-400 text-[10px] shrink-0">Up next</span>}
-                    </div>
-                    <p className="text-xs text-subtle truncate mt-0.5">{mission.description}</p>
-                  </div>
-
-                  <div className="hidden sm:flex items-center gap-4 text-xs text-subtle shrink-0">
-                    <span className="flex items-center gap-1"><Clock size={11} /> {mission.estimatedMinutes}m</span>
-                    <span className="flex items-center gap-1"><Zap size={11} /> {mission.xpReward}</span>
-                    <span className={`badge-${mission.difficulty} !text-[10px]`}>{mission.difficulty}</span>
-                  </div>
-                  <ChevronRight size={16} className="text-subtle group-hover:text-brand-500 transition-colors shrink-0" />
-                </Link>
-              );
-            })}
-            {missions.length === 0 && (
-              <div className="p-8 text-center text-subtle text-sm">No missions in this path yet.</div>
-            )}
-          </div>
+          {lessons.length === 0 && !final ? (
+            <div className="p-8 text-center text-subtle text-sm">No lessons in this path yet.</div>
+          ) : (
+            <LessonTrack lessons={lessons} final={final} pathSlug={path.slug} />
+          )}
         </div>
       </div>
     );
   }
 
-  /* ================= Catalog ================= */
-  const featured = filtered.find((p) => p.isFeatured);
-  const rest = filtered.filter((p) => p !== featured);
-
+  /* ================= Journey (catalog) ================= */
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-8">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-brand-600 dark:text-brand-400 mb-1">Learn</div>
-          <h1 className="text-2xl font-bold text-content">Learning Paths</h1>
-          <p className="text-muted mt-1 text-sm">Structured tracks — lessons first, then a mission quiz to prove it.</p>
-        </div>
-        {totals.totalMissions > 0 && (
-          <div className="card px-4 py-3 min-w-[190px]">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="text-subtle flex items-center gap-1.5"><Trophy size={12} className="text-yellow-600 dark:text-yellow-400" /> Your progress</span>
-              <span className="font-bold text-content">{totals.pct}%</span>
-            </div>
-            <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-brand-600 to-cyber-500 rounded-full" style={{ width: `${totals.pct}%` }} />
-            </div>
-            <div className="text-[11px] text-subtle mt-1.5">{totals.done} of {totals.totalMissions} missions done</div>
-          </div>
-        )}
+      <div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-brand-600 dark:text-brand-400 mb-1">Learn</div>
+        <h1 className="text-2xl font-bold text-content">Your learning journey</h1>
+        <p className="text-muted mt-1 text-sm">Guided courses — read each lesson, then pass its checkpoint quiz to earn XP.</p>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
-          <input
-            className="input pl-9"
-            placeholder="Search paths..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {DIFFICULTIES.map((d) => (
-            <button
-              key={d.value}
-              onClick={() => setDifficulty(d.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                difficulty === d.value ? 'bg-brand-600 text-white' : 'bg-surface-2 text-muted hover:text-content'
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+      {/* Resume hero */}
+      {resumePath && <ResumeHero path={resumePath} />}
+
+      {/* Difficulty filter */}
+      <div className="flex gap-1.5 flex-wrap">
+        {DIFFICULTIES.map((d) => (
+          <button
+            key={d.value}
+            onClick={() => setDifficulty(d.value)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              difficulty === d.value ? 'bg-brand-600 text-white' : 'bg-surface-2 text-muted hover:text-content'
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
       </div>
 
-      {/* Featured path — wide card */}
-      {featured && <FeaturedCard path={featured} />}
-
-      {/* Path grid */}
-      <div className="grid sm:grid-cols-2 gap-4">
-        {rest.map((path) => <PathCard key={path._id} path={path} />)}
-      </div>
+      {/* Paths as curriculum tracks */}
+      {filtered.map((p) => (
+        <PathSection key={p._id} path={p} />
+      ))}
 
       {filtered.length === 0 && (
         <div className="card p-12 text-center">
           <BookOpen size={32} className="mx-auto text-subtle mb-3" />
-          <p className="text-subtle">{paths.length === 0 ? 'No learning paths published yet.' : 'No paths match your filters.'}</p>
+          <p className="text-subtle">{paths.length === 0 ? 'No learning paths published yet.' : 'No paths at this level.'}</p>
         </div>
       )}
+
+      {/* Wayfinding */}
+      <div className="card p-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-medium text-content text-sm">Already know the material?</p>
+          <p className="text-xs text-subtle mt-0.5">Skip the lessons and test yourself in scored quizzes.</p>
+        </div>
+        <Link to="/app/quiz" className="btn-secondary text-sm">
+          Go to Quizzes <ArrowRight size={14} />
+        </Link>
+      </div>
     </div>
   );
 }
 
-function pathStats(path) {
-  const total = path.progress?.totalMissions ?? path.missions?.length ?? 0;
-  const done = path.progress?.completedMissions ?? 0;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  const status = done === 0 ? 'not-started' : done === total && total > 0 ? 'done' : 'in-progress';
-  return { total, done, pct, status };
+/* ================= Components ================= */
+
+function ResumeHero({ path }) {
+  const { total, done, next, pct, final, finalPassed, lessonsDone } = pathStats(path);
+  const started = done > 0;
+  const examReady = lessonsDone && final && !finalPassed;
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="h-1.5 bg-gradient-to-r from-brand-600 via-cyber-500 to-brand-600" />
+      <div className="p-6 sm:p-7">
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-brand-600 dark:text-brand-400 mb-3">
+          {examReady ? 'One step left' : started ? 'Continue where you left off' : 'Start here'}
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="w-14 h-14 rounded-2xl bg-brand-600/10 border border-brand-500/20 flex items-center justify-center text-3xl shrink-0">
+            {path.icon || '🧠'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold text-content">{path.title}</h2>
+            {next ? (
+              <p className="text-sm text-muted mt-0.5 truncate">
+                Next lesson: <span className="text-content font-medium">{next.mission.title}</span>
+              </p>
+            ) : examReady ? (
+              <p className="text-sm text-muted mt-0.5">
+                All lessons complete — finish with the <span className="text-content font-medium">{final.totalQuestions}-question final assessment</span>
+              </p>
+            ) : null}
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-subtle">{done} of {total} lessons done</span>
+                <span className="font-bold text-brand-600 dark:text-brand-400">{pct}%</span>
+              </div>
+              <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-brand-600 to-cyber-500 rounded-full" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          </div>
+          {next ? (
+            <Link to={`/app/learn/mission/${next.mission.slug}`} className="btn-primary shrink-0 justify-center sm:w-44">
+              <Play size={15} /> {started ? 'Resume lesson' : 'Start lesson 1'}
+            </Link>
+          ) : examReady ? (
+            <Link
+              to={`/app/quiz/${final._id}`}
+              state={{ from: 'path', pathSlug: path.slug }}
+              className="btn-primary shrink-0 justify-center sm:w-44"
+            >
+              <Trophy size={15} /> Take final exam
+            </Link>
+          ) : (
+            <Link to={`/app/learn/${path.slug}`} className="btn-secondary shrink-0 justify-center sm:w-44">
+              Review path
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function FeaturedCard({ path }) {
-  const { total, done, pct, status } = pathStats(path);
+function PathSection({ path }) {
+  const { lessons, total, done, pct, final, finalPassed, lessonsDone } = pathStats(path);
+  const complete = lessonsDone && (!final || finalPassed);
+  const examPending = lessonsDone && final && !finalPassed;
+
   return (
-    <Link to={`/app/learn/${path.slug}`} className="card overflow-hidden hover:border-brand-600/50 transition-all group block">
-      <div className="h-1.5 bg-gradient-to-r from-brand-600 via-cyber-500 to-brand-600" />
-      <div className="p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-6">
-        <div className="w-16 h-16 rounded-2xl bg-brand-600/10 border border-brand-500/20 flex items-center justify-center text-4xl shrink-0">
+    <section className="card overflow-hidden">
+      {/* Path header */}
+      <Link to={`/app/learn/${path.slug}`} className="flex items-start gap-4 p-5 pb-4 group">
+        <div className="w-11 h-11 rounded-xl bg-surface-2 border border-border-strong flex items-center justify-center text-2xl shrink-0">
           {path.icon || '🧠'}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-xl font-bold text-content group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{path.title}</h3>
-            <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-xs"><Sparkles size={10} /> Featured</span>
+            <h3 className="font-semibold text-content group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+              {path.title}
+            </h3>
             <span className={`badge-${path.difficulty}`}>{path.difficulty}</span>
+            {complete && (
+              <span className="badge bg-green-500/15 text-green-600 dark:text-green-400 text-xs">
+                <CheckCircle2 size={11} /> Completed
+              </span>
+            )}
+            {examPending && (
+              <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-xs">
+                <Trophy size={11} /> Final exam left
+              </span>
+            )}
           </div>
-          <p className="text-sm text-muted mt-1.5 line-clamp-2">{path.description}</p>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs text-subtle">
-            <span className="flex items-center gap-1"><Clock size={12} /> {path.estimatedHours}h</span>
-            <span className="flex items-center gap-1"><Layers size={12} /> {total} missions</span>
-            {status === 'done' && <span className="text-green-600 dark:text-green-400 font-medium flex items-center gap-1"><CheckCircle2 size={12} /> Completed</span>}
-          </div>
-        </div>
-        <div className="sm:w-48 shrink-0">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-subtle">{status === 'not-started' ? 'Not started' : `${done}/${total} done`}</span>
-            <span className="font-bold text-brand-600 dark:text-brand-400">{pct}%</span>
-          </div>
-          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mb-3">
-            <div className={`h-full rounded-full ${status === 'done' ? 'bg-green-500' : 'bg-gradient-to-r from-brand-600 to-cyber-500'}`} style={{ width: `${pct}%` }} />
-          </div>
-          <div className="btn-primary w-full text-sm justify-center">
-            <Play size={14} /> {status === 'not-started' ? 'Start path' : status === 'done' ? 'Review' : 'Continue'}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-subtle">
+            <span className="flex items-center gap-1"><Clock size={11} /> {path.estimatedHours}h</span>
+            <span className="flex items-center gap-1"><Layers size={11} /> {total} lessons</span>
+            <span>{done} done · {pct}%</span>
           </div>
         </div>
-      </div>
-    </Link>
+        <div className="w-24 shrink-0 hidden sm:block pt-1">
+          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${complete ? 'bg-green-500' : 'bg-gradient-to-r from-brand-600 to-cyber-500'}`} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      </Link>
+
+      {/* Lesson steps + final assessment node */}
+      {(lessons.length > 0 || final) && (
+        <div className="px-5 pb-5">
+          <LessonTrack lessons={lessons} final={final} pathSlug={path.slug} />
+        </div>
+      )}
+    </section>
   );
 }
 
-function PathCard({ path }) {
-  const { total, done, pct, status } = pathStats(path);
+function LessonTrack({ lessons, final = null, pathSlug = null }) {
+  const [shaking, setShaking] = useState(null);
+  const nextIdx = lessons.findIndex((m) => !m.completed);
+  const lessonsDone = lessons.length > 0 && nextIdx === -1;
+  const finalLocked = final ? (final.locked ?? !lessonsDone) : false;
+  const finalIsNext = Boolean(final) && lessonsDone && !final.passed;
+
+  // Locked rows give playful feedback instead of navigating
+  const pokeLocked = (key, msg) => {
+    setShaking(key);
+    toast(msg, { icon: '🔒' });
+    setTimeout(() => setShaking((s) => (s === key ? null : s)), 500);
+  };
+
   return (
-    <Link to={`/app/learn/${path.slug}`} className="card overflow-hidden hover:border-brand-600/50 transition-all group flex flex-col h-full">
-      <div className={`h-1 ${status === 'done' ? 'bg-green-500' : 'bg-gradient-to-r from-brand-600 to-cyber-500'}`} />
-      <div className="p-5 flex flex-col flex-1">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-surface-2 border border-border-strong flex items-center justify-center text-2xl shrink-0">
-            {path.icon || '🧠'}
-          </div>
-          <span className={`badge-${path.difficulty}`}>{path.difficulty}</span>
-        </div>
-        <h3 className="font-semibold text-content group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{path.title}</h3>
-        <p className="text-sm text-muted mt-1 line-clamp-2 flex-1">{path.description}</p>
-        <div className="flex items-center gap-3 mt-3 text-xs text-subtle">
-          <span className="flex items-center gap-1"><Clock size={12} /> {path.estimatedHours}h</span>
-          <span className="flex items-center gap-1"><Layers size={12} /> {total} missions</span>
-        </div>
-        <div className="mt-4 pt-4 border-t border-border/60">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className={status === 'done' ? 'text-green-600 dark:text-green-400 font-medium' : status === 'in-progress' ? 'text-brand-600 dark:text-brand-400 font-medium' : 'text-subtle'}>
-              {status === 'not-started' ? 'Not started' : status === 'done' ? 'Completed' : `${done}/${total} done`}
-            </span>
-            <span className="text-subtle flex items-center gap-1">{pct}%<ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" /></span>
-          </div>
-          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${status === 'done' ? 'bg-green-500' : 'bg-gradient-to-r from-brand-600 to-cyber-500'}`} style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      </div>
-    </Link>
+    <ol>
+      {lessons.map((m, i) => {
+        const lesson = m.mission;
+        const completed = m.completed;
+        const isNext = !completed && i === nextIdx;
+        // Server-provided flag, with a local fallback for older payloads
+        const locked = m.locked ?? (nextIdx !== -1 && i > nextIdx);
+        const last = i === lessons.length - 1 && !final;
+        const rowKey = m._id || lesson._id || i;
+        return (
+          <li key={rowKey} className="relative">
+            {/* Connecting rail — dashed ahead of the current position */}
+            {!last && (
+              <span
+                aria-hidden="true"
+                className={`absolute left-[25px] top-10 -bottom-1 border-l-2 ${
+                  completed ? 'border-green-500/40 border-solid' : locked ? 'border-border border-dashed' : 'border-border border-solid'
+                }`}
+              />
+            )}
+            {locked ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => pokeLocked(rowKey, `Locked — pass Lesson ${nextIdx + 1}'s checkpoint first`)}
+                onKeyDown={(e) => e.key === 'Enter' && pokeLocked(rowKey, `Locked — pass Lesson ${nextIdx + 1}'s checkpoint first`)}
+                className={`relative flex items-center gap-4 px-2 py-3 rounded-lg cursor-not-allowed select-none ${
+                  shaking === rowKey ? 'animate-lock-shake' : ''
+                }`}
+              >
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border z-10 bg-surface-2 border-border-strong text-subtle">
+                  <Lock size={14} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-sm truncate text-subtle">{lesson.title}</h4>
+                    <span className="badge bg-surface-2 text-subtle border border-border-strong text-[10px] shrink-0">
+                      <Lock size={9} /> Locked
+                    </span>
+                  </div>
+                  <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>Lesson {i + 1}</span>
+                    <span>unlocks after Lesson {nextIdx + 1}</span>
+                  </p>
+                </div>
+                <div className="hidden sm:flex items-center gap-4 text-xs text-subtle/60 shrink-0">
+                  <span className="flex items-center gap-1"><Clock size={11} /> {lesson.estimatedMinutes}m</span>
+                  <span className="flex items-center gap-1"><Zap size={11} /> {lesson.xpReward} XP</span>
+                </div>
+              </div>
+            ) : (
+              <Link
+                to={`/app/learn/mission/${lesson.slug}`}
+                className={`relative flex items-center gap-4 px-2 py-3 rounded-lg transition-colors group ${
+                  isNext ? 'bg-brand-500/5' : 'hover:bg-surface-2/40'
+                }`}
+              >
+                {/* Step node — the next lesson pulses to say "you are here" */}
+                <div className="relative w-9 h-9 shrink-0">
+                  {isNext && (
+                    <span aria-hidden="true" className="absolute inset-0 rounded-full bg-brand-500 animate-ping opacity-40" />
+                  )}
+                  <div className={`relative w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border z-10 ${
+                    completed
+                      ? 'bg-green-500/15 border-green-500/30 text-green-600 dark:text-green-400'
+                      : isNext
+                      ? 'bg-brand-600 border-brand-600 text-white animate-pulse-glow'
+                      : 'bg-surface-2 border-border-strong text-subtle'
+                  }`}>
+                    {completed ? <CheckCircle2 size={17} className="animate-unlock-pop" /> : i + 1}
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className={`font-medium text-sm truncate transition-colors ${
+                      completed
+                        ? 'text-muted'
+                        : 'text-content group-hover:text-brand-600 dark:group-hover:text-brand-400'
+                    }`}>
+                      {lesson.title}
+                    </h4>
+                    {isNext && (
+                      <span className="badge bg-brand-500/15 text-brand-600 dark:text-brand-400 text-[10px] shrink-0">Up next</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>Lesson {i + 1}</span>
+                    {lesson.quiz && (
+                      <span className="flex items-center gap-1"><Target size={10} /> + checkpoint quiz</span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="hidden sm:flex items-center gap-4 text-xs text-subtle shrink-0">
+                  <span className="flex items-center gap-1"><Clock size={11} /> {lesson.estimatedMinutes}m</span>
+                  <span className="flex items-center gap-1"><Zap size={11} /> {lesson.xpReward} XP</span>
+                </div>
+              </Link>
+            )}
+          </li>
+        );
+      })}
+
+      {/* Final assessment — the journey's destination */}
+      {final && (
+        <li className="relative">
+          {finalLocked && !final.passed ? (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => pokeLocked('final', 'Locked — pass every lesson checkpoint to unlock the final')}
+              onKeyDown={(e) => e.key === 'Enter' && pokeLocked('final', 'Locked — pass every lesson checkpoint to unlock the final')}
+              className={`relative flex items-center gap-4 px-2 py-3 rounded-lg cursor-not-allowed select-none ${
+                shaking === 'final' ? 'animate-lock-shake' : ''
+              }`}
+            >
+              <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border z-10 bg-surface-2 border-border-strong text-subtle">
+                <Lock size={14} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-medium text-sm truncate text-subtle">{final.title}</h4>
+                  <span className="badge bg-surface-2 text-subtle border border-border-strong text-[10px] shrink-0">
+                    <Lock size={9} /> Locked
+                  </span>
+                </div>
+                <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span className="flex items-center gap-1"><Trophy size={10} /> Final Assessment</span>
+                  <span>{final.totalQuestions} questions</span>
+                  <span>unlocks when all checkpoints pass</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <Link
+              to={`/app/quiz/${final._id}`}
+              state={{ from: 'path', pathSlug }}
+              className={`relative flex items-center gap-4 px-2 py-3 rounded-lg transition-colors group ${
+                finalIsNext ? 'bg-yellow-500/5' : 'hover:bg-surface-2/40'
+              }`}
+            >
+              <div className="relative w-9 h-9 shrink-0">
+                {finalIsNext && (
+                  <span aria-hidden="true" className="absolute inset-0 rounded-full bg-yellow-500 animate-ping opacity-40" />
+                )}
+                <div className={`relative w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border z-10 ${
+                  final.passed
+                    ? 'bg-green-500/15 border-green-500/30 text-green-600 dark:text-green-400'
+                    : finalIsNext
+                    ? 'bg-yellow-500 border-yellow-500 text-white animate-pulse-glow'
+                    : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400'
+                }`}>
+                  {final.passed ? <CheckCircle2 size={17} className="animate-unlock-pop" /> : <Trophy size={16} />}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className={`font-medium text-sm truncate transition-colors ${
+                    final.passed
+                      ? 'text-muted'
+                      : 'text-content group-hover:text-yellow-600 dark:group-hover:text-yellow-400'
+                  }`}>
+                    {final.title}
+                  </h4>
+                  {finalIsNext && (
+                    <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-[10px] shrink-0">Up next</span>
+                  )}
+                  {final.passed && (
+                    <span className="badge bg-green-500/15 text-green-600 dark:text-green-400 text-[10px] shrink-0">Passed</span>
+                  )}
+                </div>
+                <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span className="flex items-center gap-1"><Trophy size={10} /> Final Assessment</span>
+                  <span>{final.totalQuestions} questions</span>
+                  {final.rules?.timeLimit > 0 && <span>{Math.round(final.rules.timeLimit / 60)} min</span>}
+                  <span>{final.rules?.passingScore ?? 60}% to pass</span>
+                </p>
+              </div>
+            </Link>
+          )}
+        </li>
+      )}
+    </ol>
   );
 }

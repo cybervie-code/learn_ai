@@ -20,7 +20,7 @@ export default function AdminSidebar({ onNavigate }) {
   ];
 
   return (
-    <aside className="w-64 bg-surface border-r border-border flex flex-col h-screen sticky top-0">
+    <aside className="w-64 bg-surface border-r border-border flex flex-col h-dvh sticky top-0">
       <div className="p-5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <BrandLogo />

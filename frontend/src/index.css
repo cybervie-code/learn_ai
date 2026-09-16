@@ -43,6 +43,13 @@
   * {
     @apply border-border;
   }
+  /* Grid items default to min-width:auto, so an auto-sized track can grow to
+     the widest child's min-content (e.g. line-clamped titles measure at their
+     full unwrapped width) and push the whole page into horizontal scroll.
+     Letting items shrink keeps tracks inside the container. */
+  .grid > * {
+    min-width: 0;
+  }
   body {
     @apply bg-surface text-content antialiased;
     font-family: 'Inter', system-ui, sans-serif;

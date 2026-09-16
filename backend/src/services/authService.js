@@ -54,6 +54,25 @@ export async function googleLogin(idToken) {
   if (!email) throw ApiError.badRequest('Google token missing email');
   if (!emailVerified) throw ApiError.badRequest('Email not verified by Google');
 
+  // Resolve the college up front: the Google hosted-domain claim first, then
+  // the email domain as fallback.
+  let college = null;
+  if (hostedDomain) {
+    college = await College.findOne({
+      'domains.domain': hostedDomain,
+      'domains.verified': true,
+    });
+  }
+  if (!college) {
+    const emailDomain = email.split('@')[1];
+    if (emailDomain && emailDomain !== 'gmail.com') {
+      college = await College.findOne({
+        'domains.domain': emailDomain,
+        'domains.verified': true,
+      });
+    }
+  }
+
   // Find existing user by Google sub
   let user = await User.findOne({
     'externalIdentities.provider': 'google',
@@ -69,7 +88,8 @@ export async function googleLogin(idToken) {
   };
 
   if (user) {
-    // Existing user - update last login
+    attachCollegeIfWhitelisted(user, college);
+    assertPlatformAccess(user);
     user.lastLoginAt = new Date();
     await user.save();
     return { user, token: signToken(user._id) };
@@ -79,6 +99,8 @@ export async function googleLogin(idToken) {
   // seeded with email/password) - link the Google identity to it
   user = await User.findOne({ email: email.toLowerCase() });
   if (user) {
+    attachCollegeIfWhitelisted(user, college);
+    assertPlatformAccess(user);
     user.externalIdentities = user.externalIdentities || [];
     if (!user.externalIdentities.some((i) => i.provider === 'google' && i.providerSubject === sub)) {
       user.externalIdentities.push(googleIdentity);
@@ -91,35 +113,15 @@ export async function googleLogin(idToken) {
     return { user, token: signToken(user._id) };
   }
 
-  // New user - determine college from hosted domain
-  let college = null;
-  if (hostedDomain) {
-    college = await College.findOne({
-      'domains.domain': hostedDomain,
-      'domains.verified': true,
-    });
-  }
+  // New user - only verified college domains may self-register via Google
+  if (!college) throw domainNotWhitelisted();
 
-  // If no college found via hd, try email domain (fallback, less secure)
-  if (!college) {
-    const emailDomain = email.split('@')[1];
-    if (emailDomain && emailDomain !== 'gmail.com') {
-      college = await College.findOne({
-        'domains.domain': emailDomain,
-        'domains.verified': true,
-      });
-    }
-  }
-
-  // Create new user. If no verified college matches the domain the account is
-  // still created as an unaffiliated student (college: null) - they can be
-  // attached to a college later by an admin.
   user = new User({
     email,
     name,
     avatarUrl,
     role: 'student',
-    college: college ? college._id : null,
+    college: college._id,
     status: 'active',
     emailVerified: true,
     externalIdentities: [googleIdentity],
@@ -161,6 +163,29 @@ async function findCollegeByEmailDomain(email) {
   });
 }
 
+const DOMAIN_GATE_MESSAGE =
+  'Cybervie is only open to partnered colleges. Please sign in or register with your official college email address.';
+
+function domainNotWhitelisted() {
+  return ApiError.forbidden(DOMAIN_GATE_MESSAGE, { domainNotWhitelisted: true });
+}
+
+/**
+ * Attach a verified-domain college to an account that predates the whitelist
+ * (e.g. the domain was verified after the account was created).
+ */
+function attachCollegeIfWhitelisted(user, college) {
+  if (!user.college && !user.platformRole && college) user.college = college._id;
+}
+
+/**
+ * Only college-affiliated users and platform staff may access the platform.
+ * Throws 403 for accounts with no college and no staff role.
+ */
+function assertPlatformAccess(user) {
+  if (!user.college && !user.platformRole) throw domainNotWhitelisted();
+}
+
 /**
  * Email/password login. Verifies the password first, then checks account state
  * so we never reveal account status to someone without the right password.
@@ -175,6 +200,8 @@ export async function emailLogin(email, password) {
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw ApiError.unauthorized('Invalid credentials');
+
+  assertPlatformAccess(user);
 
   if (!user.emailVerified && user.status === 'invited') {
     throw ApiError.forbidden('Please verify your email to continue', { requiresVerification: true });
@@ -202,6 +229,14 @@ export async function emailRegister({ email, password, name }) {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   const existing = await User.findOne({ email: normalizedEmail });
+
+  // Self-registration requires a verified college domain. Accounts already
+  // attached to a college (e.g. invited by an admin) or platform staff are
+  // allowed through to complete the normal flow.
+  if (!college && !(existing && (existing.college || existing.platformRole))) {
+    throw domainNotWhitelisted();
+  }
+
   if (existing) {
     if (existing.emailVerified) {
       throw ApiError.conflict('Email already registered. Please sign in.');
@@ -210,6 +245,7 @@ export async function emailRegister({ email, password, name }) {
       throw ApiError.forbidden('This account is not active. Please contact support.');
     }
     // Unverified account re-registering - update details and resend OTP
+    attachCollegeIfWhitelisted(existing, college);
     existing.name = name.trim();
     existing.password = hashedPassword;
     await existing.save();
@@ -222,7 +258,7 @@ export async function emailRegister({ email, password, name }) {
     name: name.trim(),
     password: hashedPassword,
     role: 'student',
-    college: college ? college._id : null,
+    college: college._id,
     status: 'invited',
     emailVerified: false,
   });
@@ -246,6 +282,8 @@ export async function verifyEmailOtp(email, otp) {
 
   const user = await User.findOne({ email: normalizedEmail });
   if (!user) throw ApiError.badRequest('Account not found. Please register again.');
+
+  assertPlatformAccess(user);
 
   user.emailVerified = true;
   if (user.status === 'invited') user.status = 'active';

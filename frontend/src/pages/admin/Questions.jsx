@@ -43,14 +43,14 @@ export default function Questions() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-content flex items-center gap-2">
             <FileQuestion size={24} className="text-cyber-600 dark:text-cyber-400" /> Question Bank
           </h1>
           <p className="text-muted mt-1">Create and manage quiz questions</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
+        <button onClick={() => setShowCreate(true)} className="btn-primary shrink-0">
           <Plus size={16} /> New Question
         </button>
       </div>
@@ -82,7 +82,7 @@ export default function Questions() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
           <input className="input pl-10" placeholder="Search questions, topics, tags..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="input w-40" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select className="input w-full sm:w-40" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           <option value="draft">Draft</option>
           <option value="technical-review">In Review</option>
@@ -90,14 +90,14 @@ export default function Questions() {
           <option value="published">Published</option>
           <option value="retired">Retired</option>
         </select>
-        <select className="input w-40" value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}>
+        <select className="input w-full sm:w-40" value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}>
           <option value="">All Difficulties</option>
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
           <option value="expert">Expert</option>
         </select>
-        <select className="input w-40" value={trackFilter} onChange={(e) => setTrackFilter(e.target.value)}>
+        <select className="input w-full sm:w-40" value={trackFilter} onChange={(e) => setTrackFilter(e.target.value)}>
           <option value="">All Tracks</option>
           <option value="foundation">Foundation</option>
           <option value="technical">Technical</option>
@@ -116,7 +116,7 @@ export default function Questions() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-content line-clamp-2">{v?.questionText}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-subtle">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 text-xs text-subtle">
                     <span className={`badge ${statusColors[q.status] || 'bg-gray-500/15 text-muted'}`}>{q.status}</span>
                     <span className={`badge-${q.difficulty}`}>{q.difficulty}</span>
                     <span>{q.topic}</span>

@@ -47,23 +47,23 @@ export default function Profile() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Profile header */}
-      <div className="card p-8 bg-gradient-to-br from-brand-600/10 to-brand-600/5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-600 dark:text-brand-400 text-2xl font-bold">
+      <div className="card p-6 sm:p-8 bg-gradient-to-br from-brand-600/10 to-brand-600/5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-600 dark:text-brand-400 text-2xl font-bold shrink-0">
               {profile.name?.charAt(0)?.toUpperCase()}
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-content">{profile.name}</h1>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-content break-words">{profile.name}</h1>
               {profile.headline && <p className="text-muted mt-1">{profile.headline}</p>}
-              <div className="flex items-center gap-3 mt-2 text-sm text-subtle">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-subtle">
                 {profile.college && <span className="flex items-center gap-1"><Building2 size={12} /> {profile.college.name}</span>}
                 {profile.branch && <span>• {profile.branch}</span>}
                 {profile.graduationYear && <span>• {profile.graduationYear}</span>}
               </div>
             </div>
           </div>
-          <button onClick={() => setEditing(!editing)} className="btn-secondary">
+          <button onClick={() => setEditing(!editing)} className="btn-secondary shrink-0">
             {editing ? 'Cancel' : <><Edit3 size={14} /> Edit</>}
           </button>
         </div>
@@ -81,7 +81,7 @@ export default function Profile() {
       {editing && (
         <div className="card p-6 space-y-4">
           <h2 className="text-lg font-semibold text-content">Edit Profile</h2>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="label">Name</label>
               <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -151,12 +151,12 @@ export default function Profile() {
           </h2>
           <div className="space-y-2">
             {profile.recentAttempts.map((a, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                <div>
-                  <div className="text-sm text-content">{a.quizTitle}</div>
+              <div key={i} className="flex items-center justify-between gap-3 py-2 border-b border-border/50 last:border-0">
+                <div className="min-w-0">
+                  <div className="text-sm text-content truncate">{a.quizTitle}</div>
                   <div className="text-xs text-subtle">{new Date(a.createdAt).toLocaleDateString()}</div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm text-muted">{a.correctCount}/{a.totalPoints / 10}</span>
                   <span className={`text-sm font-semibold ${a.percentage >= 60 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
                     {a.percentage}%

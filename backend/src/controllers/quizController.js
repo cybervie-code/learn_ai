@@ -91,7 +91,8 @@ export const listQuizzes = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(Number(limit))
-    .populate('mission', 'title slug')
+    .populate('mission', 'title slug order')
+    .populate('learningPath', 'title slug icon')
     .populate('author', 'name');
 
   const total = await Quiz.countDocuments(query);
@@ -107,7 +108,8 @@ export const getQuiz = asyncHandler(async (req, res) => {
       select: 'questionType difficulty topic competency versions.questionText versions.options',
       populate: { path: 'competency', select: 'name code' },
     })
-    .populate('mission', 'title slug')
+    .populate('mission', 'title slug order')
+    .populate('learningPath', 'title slug icon')
     .populate('author', 'name');
 
   if (!quiz) throw ApiError.notFound('Quiz not found');

@@ -1,9 +1,36 @@
 import { LearningPath } from '../models/LearningPath.js';
 import { Mission } from '../models/Mission.js';
+import { Quiz } from '../models/Quiz.js';
 import { Attempt } from '../models/Attempt.js';
 import { sendSuccess } from '../utils/sendResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
+import { missionLock } from '../utils/sequenceGate.js';
+
+const FINAL_SELECT =
+  'title slug description type totalQuestions totalPoints estimatedMinutes difficulty learningPath rules';
+
+// A path's final assessment is the published quiz linked to the path with no
+// mission — checkpoints always have a mission, so mission:null is the spine.
+// If several exist, prefer the one explicitly typed 'assessment'.
+async function findFinalAssessments(pathIds) {
+  const finals = await Quiz.find({
+    learningPath: { $in: pathIds },
+    mission: null,
+    status: 'published',
+    isPublished: true,
+  }).select(FINAL_SELECT).lean();
+
+  const byPath = new Map();
+  for (const f of finals) {
+    const key = String(f.learningPath);
+    const cur = byPath.get(key);
+    if (!cur || (f.type === 'assessment' && cur.type !== 'assessment')) {
+      byPath.set(key, f);
+    }
+  }
+  return byPath;
+}
 
 // List published learning paths
 export const listPaths = asyncHandler(async (req, res) => {
@@ -21,31 +48,53 @@ export const listPaths = asyncHandler(async (req, res) => {
   const paths = await LearningPath.find(query)
     .sort({ order: 1, createdAt: -1 })
     .populate('competencies', 'name code')
+    .populate({
+      path: 'missions.mission',
+      select: 'title slug estimatedMinutes difficulty icon xpReward quiz isPublished',
+    })
     .lean();
 
-  // Add real progress for logged-in users: a mission counts as completed
-  // when the user has a finalised attempt (>=60%) on that mission's quiz
-  if (req.user) {
-    const allMissionIds = paths.flatMap((p) => p.missions.map((m) => m.mission));
-    const missions = await Mission.find({ _id: { $in: allMissionIds } }).select('quiz').lean();
-    const missionQuiz = {};
-    missions.forEach((m) => { missionQuiz[String(m._id)] = m.quiz; });
-    const quizIds = missions.map((m) => m.quiz).filter(Boolean);
-    const passedQuizIds = new Set(
-      (await Attempt.distinct('quiz', {
-        user: req.user._id,
-        quiz: { $in: quizIds },
-        status: 'finalised',
-        percentage: { $gte: 60 },
-      })).map(String)
-    );
-    for (const path of paths) {
-      const done = path.missions.filter((m) => passedQuizIds.has(String(missionQuiz[String(m.mission)]))).length;
-      path.progress = {
-        totalMissions: path.missions.length,
-        completedMissions: done,
-      };
-    }
+  // A mission counts as completed when the user has a finalised attempt
+  // (>=60%) on that mission's quiz; the final assessment follows the same rule
+  const finalByPath = await findFinalAssessments(paths.map((p) => p._id));
+  const quizIds = [
+    ...paths.flatMap((p) => p.missions.map((m) => m.mission?.quiz)).filter(Boolean),
+    ...[...finalByPath.values()].map((f) => f._id),
+  ];
+  const passedQuizIds = req.user
+    ? new Set(
+        (await Attempt.distinct('quiz', {
+          user: req.user._id,
+          quiz: { $in: quizIds },
+          status: 'finalised',
+          percentage: { $gte: 60 },
+        })).map(String)
+      )
+    : new Set();
+
+  for (const path of paths) {
+    let done = 0;
+    path.missions.forEach((m) => {
+      m.completed = Boolean(m.mission?.quiz && passedQuizIds.has(String(m.mission.quiz)));
+      if (m.completed) done += 1;
+    });
+    // Sequential gating: a lesson stays locked while any earlier
+    // checkpoint-bearing lesson is unpassed; the final needs them all.
+    let gated = false;
+    [...path.missions]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .forEach((m) => {
+        m.locked = gated;
+        if (m.mission?.quiz && !m.completed) gated = true;
+      });
+    path.progress = {
+      totalMissions: path.missions.length,
+      completedMissions: done,
+    };
+    const final = finalByPath.get(String(path._id));
+    path.finalAssessment = final
+      ? { ...final, passed: passedQuizIds.has(String(final._id)), locked: gated }
+      : null;
   }
 
   sendSuccess(res, paths, 'Learning paths fetched');
@@ -63,22 +112,41 @@ export const getPath = asyncHandler(async (req, res) => {
 
   if (!path) throw ApiError.notFound('Learning path not found');
 
-  // Flag each mission as completed if the user passed its quiz (>=60%)
+  // Flag each mission as completed if the user passed its quiz (>=60%);
+  // the final assessment follows the same rule
   const obj = path.toObject();
-  if (req.user) {
-    const quizIds = obj.missions.map((m) => m.mission?.quiz).filter(Boolean);
-    const passed = new Set(
-      (await Attempt.distinct('quiz', {
-        user: req.user._id,
-        quiz: { $in: quizIds },
-        status: 'finalised',
-        percentage: { $gte: 60 },
-      })).map(String)
-    );
-    obj.missions.forEach((m) => {
-      m.completed = m.mission?.quiz ? passed.has(String(m.mission.quiz)) : false;
+  const finalByPath = await findFinalAssessments([obj._id]);
+  const final = finalByPath.get(String(obj._id)) || null;
+
+  const quizIds = [
+    ...obj.missions.map((m) => m.mission?.quiz).filter(Boolean),
+    ...(final ? [final._id] : []),
+  ];
+  const passed = req.user
+    ? new Set(
+        (await Attempt.distinct('quiz', {
+          user: req.user._id,
+          quiz: { $in: quizIds },
+          status: 'finalised',
+          percentage: { $gte: 60 },
+        })).map(String)
+      )
+    : new Set();
+
+  obj.missions.forEach((m) => {
+    m.completed = m.mission?.quiz ? passed.has(String(m.mission.quiz)) : false;
+  });
+  // Sequential gating — see listPaths
+  let gated = false;
+  [...obj.missions]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .forEach((m) => {
+      m.locked = gated;
+      if (m.mission?.quiz && !m.completed) gated = true;
     });
-  }
+  obj.finalAssessment = final
+    ? { ...final, passed: passed.has(String(final._id)), locked: gated }
+    : null;
 
   sendSuccess(res, obj, 'Learning path fetched');
 });
@@ -139,7 +207,18 @@ export const getMission = asyncHandler(async (req, res) => {
     .populate('learningPath', 'title slug');
 
   if (!mission) throw ApiError.notFound('Mission not found');
-  sendSuccess(res, mission, 'Mission fetched');
+
+  // Sequential gating — non-student roles can always preview lesson content
+  const obj = mission.toObject();
+  if (req.user && req.user.role !== 'student') {
+    obj.locked = false;
+    obj.lockedReason = null;
+  } else {
+    const gate = await missionLock(mission, req.user?._id);
+    obj.locked = gate.locked;
+    obj.lockedReason = gate.reason;
+  }
+  sendSuccess(res, obj, 'Mission fetched');
 });
 
 // Admin: create mission

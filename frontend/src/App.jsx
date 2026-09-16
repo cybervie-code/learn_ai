@@ -20,7 +20,7 @@ import FacultyDashboard from './pages/faculty/FacultyDashboard.jsx';
 import Learn from './pages/student/Learn.jsx';
 import MissionDetail from './pages/student/MissionDetail.jsx';
 import QuizPlayer from './pages/student/QuizPlayer.jsx';
-import Practice from './pages/student/Practice.jsx';
+import Quiz from './pages/student/Quiz.jsx';
 import Rankings from './pages/student/Rankings.jsx';
 import Profile from './pages/student/Profile.jsx';
 import Assignments from './pages/student/Assignments.jsx';
@@ -96,7 +96,8 @@ export default function App() {
             <Route path="learn/:slug" element={<Learn />} />
             <Route path="learn/mission/:slug" element={<MissionDetail />} />
             <Route path="quiz/:quizId" element={<StudentRoute><QuizPlayer /></StudentRoute>} />
-            <Route path="practice" element={<StudentRoute><Practice /></StudentRoute>} />
+            <Route path="quiz" element={<StudentRoute><Quiz /></StudentRoute>} />
+            <Route path="practice" element={<Navigate to="/app/quiz" replace />} />
             <Route path="rankings" element={<Rankings />} />
             <Route path="profile" element={<Profile />} />
             <Route path="assignments" element={<Assignments />} />

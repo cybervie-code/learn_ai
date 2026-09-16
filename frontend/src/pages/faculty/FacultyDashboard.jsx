@@ -51,7 +51,7 @@ export default function FacultyDashboard() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-content">Welcome, {firstName}</h1>
           <span className="badge bg-cyber-500/15 text-cyber-600 dark:text-cyber-400 border border-cyber-500/20 text-xs capitalize">
             {user?.role?.replace(/-/g, ' ')}
@@ -111,7 +111,7 @@ export default function FacultyDashboard() {
               const due = a.dueDate ? new Date(a.dueDate) : null;
               const overdue = due && due < new Date();
               return (
-                <div key={a._id} className="flex items-center justify-between px-5 py-3.5">
+                <div key={a._id} className="flex items-center justify-between gap-3 px-5 py-3.5">
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-content truncate">{a.title}</div>
                     <div className="text-xs text-subtle mt-0.5 flex items-center gap-3">

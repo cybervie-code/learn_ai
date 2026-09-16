@@ -12,7 +12,7 @@ export default function Sidebar({ onNavigate }) {
   const studentLinks = [
     { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/app/learn', label: 'Learn', icon: BookOpen },
-    { to: '/app/practice', label: 'Practice', icon: Brain },
+    { to: '/app/quiz', label: 'Quiz', icon: Brain },
     { to: '/app/rankings', label: 'Rankings', icon: Trophy },
     { to: '/app/assignments', label: 'Assignments', icon: ClipboardList },
     { to: '/app/profile', label: 'Profile', icon: User },
@@ -39,7 +39,7 @@ export default function Sidebar({ onNavigate }) {
   else if (user?.role === 'college-admin' || user?.role === 'college-owner') links = adminLinks;
 
   return (
-    <aside className="w-64 bg-surface border-r border-border flex flex-col h-screen sticky top-0">
+    <aside className="w-64 bg-surface border-r border-border flex flex-col h-dvh sticky top-0">
       <div className="p-5 border-b border-border">
         <NavLink to="/" className="flex items-center gap-2.5">
           <BrandLogo />

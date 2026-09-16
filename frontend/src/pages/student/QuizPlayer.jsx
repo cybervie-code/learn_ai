@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import toast from 'react-hot-toast';
 import {
@@ -10,6 +10,7 @@ import {
 export default function QuizPlayer() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -19,6 +20,15 @@ export default function QuizPlayer() {
   const [phase, setPhase] = useState('quiz'); // quiz -> results
   const [timeLeft, setTimeLeft] = useState(null);
   const [questionStart, setQuestionStart] = useState(Date.now());
+
+  // Exit back to whichever lens the quiz was launched from:
+  // checkpoint -> its lesson, final -> its path, drill -> the quiz arena.
+  const origin = location.state || {};
+  const exit = origin.from === 'mission' && origin.missionSlug
+    ? { to: `/app/learn/mission/${origin.missionSlug}`, label: 'Back to lesson' }
+    : origin.from === 'path' && origin.pathSlug
+    ? { to: `/app/learn/${origin.pathSlug}`, label: 'Back to course' }
+    : { to: '/app/quiz', label: 'Back to quizzes' };
 
   useEffect(() => {
     api.startAttempt(quizId).then((res) => {
@@ -32,8 +42,9 @@ export default function QuizPlayer() {
       setLoading(false);
     }).catch((err) => {
       toast.error(err.response?.data?.message || 'Failed to start quiz');
-      navigate(-1);
+      navigate(exit.to);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId]);
 
   // Timer — auto-submit on expiry, but only while still on the quiz screen
@@ -207,11 +218,11 @@ export default function QuizPlayer() {
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <button onClick={() => navigate('/app/learn')} className="btn-secondary flex-1">
-            <ArrowLeft size={16} /> Back to Learn
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button onClick={() => navigate(exit.to)} className="btn-secondary flex-1 justify-center">
+            <ArrowLeft size={16} /> {exit.label}
           </button>
-          <button onClick={() => window.location.reload()} className="btn-primary flex-1">
+          <button onClick={() => window.location.reload()} className="btn-primary flex-1 justify-center">
             <RotateCcw size={16} /> Retry Quiz
           </button>
         </div>
@@ -328,8 +339,8 @@ export default function QuizPlayer() {
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3">
-        <button onClick={() => navigate(-1)} className="btn-secondary" disabled={submitting}>
+      <div className="flex flex-wrap gap-3">
+        <button onClick={() => navigate(exit.to)} className="btn-secondary" disabled={submitting}>
           <ArrowLeft size={16} /> Exit
         </button>
         {!feedback ? (

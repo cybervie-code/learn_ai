@@ -23,14 +23,14 @@ export default function Colleges() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-content flex items-center gap-2">
             <Building2 size={24} className="text-brand-600 dark:text-brand-400" /> Colleges
           </h1>
           <p className="text-muted mt-1">Manage registered colleges and their domains</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
+        <button onClick={() => setShowCreate(true)} className="btn-primary shrink-0">
           <Plus size={16} /> Add College
         </button>
       </div>

@@ -68,7 +68,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Continue Learning */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-lg font-semibold text-content flex items-center gap-2">
@@ -81,19 +81,19 @@ export default function Dashboard() {
               className="card p-5 hover:border-brand-600/50 transition-all group block"
             >
               <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-xl bg-brand-600/10 flex items-center justify-center text-3xl">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-brand-600/10 flex items-center justify-center text-2xl sm:text-3xl shrink-0">
                   {path.icon || '🧠'}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-content group-hover:text-brand-600 dark:text-brand-400 transition-colors">{path.title}</h3>
                   <p className="text-sm text-muted mt-1 line-clamp-2">{path.description}</p>
-                  <div className="flex items-center gap-4 mt-3 text-xs text-subtle">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-xs text-subtle">
                     <span className="flex items-center gap-1"><Clock size={12} /> {path.estimatedHours}h</span>
                     <span className={`badge-${path.difficulty}`}>{path.difficulty}</span>
                     <span>{path.missions?.length || 0} missions</span>
                   </div>
                 </div>
-                <ArrowRight size={18} className="text-subtle group-hover:text-brand-600 dark:text-brand-400 transition-colors mt-2" />
+                <ArrowRight size={18} className="text-subtle group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors mt-2 shrink-0" />
               </div>
             </Link>
           ))}

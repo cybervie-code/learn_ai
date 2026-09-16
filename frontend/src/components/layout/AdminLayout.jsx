@@ -33,7 +33,7 @@ export default function AdminLayout() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-border bg-elevated/80 backdrop-blur sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6">
+        <header className="h-16 border-b border-border bg-elevated/80 backdrop-blur sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <button
               className="btn-ghost p-2 rounded-lg lg:hidden shrink-0"
@@ -43,11 +43,11 @@ export default function AdminLayout() {
               <Menu size={18} />
             </button>
             <h1 className="text-lg font-semibold text-content truncate">Platform Administration</h1>
-            <span className="badge bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/20 text-xs">
+            <span className="badge bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/20 text-xs shrink-0 hidden sm:inline-flex">
               <ShieldCheck size={12} /> {user?.platformRole}
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <ThemeToggle />
             <button onClick={handleLogout} className="btn-ghost p-2 rounded-lg" title="Logout">
               <LogOut size={18} />

@@ -50,7 +50,7 @@ export default function DashboardLayout() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-border bg-elevated/80 backdrop-blur sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6">
+        <header className="h-16 border-b border-border bg-elevated/80 backdrop-blur sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <button
               className="btn-ghost p-2 rounded-lg lg:hidden shrink-0"
@@ -69,7 +69,7 @@ export default function DashboardLayout() {
               <p className="text-xs text-subtle">{roleLabel}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <ThemeToggle />
             <button className="btn-ghost p-2 rounded-lg relative">
               <Bell size={18} />
