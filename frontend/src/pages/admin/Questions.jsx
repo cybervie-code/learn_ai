@@ -3,6 +3,7 @@ import { api } from '../../api/client.js';
 import toast from 'react-hot-toast';
 import {
   FileQuestion, Plus, Search, Edit3, Trash2, X, CheckCircle2, Clock,
+  Copy, BarChart3, Target,
 } from 'lucide-react';
 
 export default function Questions() {
@@ -10,19 +11,25 @@ export default function Questions() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState('');
+  const [trackFilter, setTrackFilter] = useState('');
+  const [stats, setStats] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
 
   const load = () => {
-    api.listQuestions({ search, status: statusFilter, page, limit: 20 }).then((res) => {
+    api.listQuestions({ search, status: statusFilter, difficulty: difficultyFilter, track: trackFilter, page, limit: 20 }).then((res) => {
       setQuestions(res.data.data.questions);
       setTotal(res.data.data.total);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [search, statusFilter, page]);
+  useEffect(() => { load(); }, [search, statusFilter, difficultyFilter, trackFilter, page]);
+  useEffect(() => {
+    api.getQuestionStats().then((res) => setStats(res.data.data)).catch(() => {});
+  }, []);
 
   const statusColors = {
     draft: 'bg-gray-500/15 text-muted',
@@ -48,18 +55,56 @@ export default function Questions() {
         </button>
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
-          <input className="input pl-10" placeholder="Search questions..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      {/* Bank stats */}
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Total Questions', value: stats.total, icon: FileQuestion, color: 'text-cyber-600 dark:text-cyber-400', bg: 'bg-cyber-500/10' },
+            { label: 'Published', value: stats.byStatus?.published || 0, icon: CheckCircle2, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/10' },
+            { label: 'Drafts', value: stats.byStatus?.draft || 0, icon: Edit3, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10' },
+            { label: 'Answer Rate', value: `${stats.analytics?.correctRate ?? 0}%`, icon: Target, color: 'text-brand-600 dark:text-brand-400', bg: 'bg-brand-500/10' },
+          ].map((s, i) => (
+            <div key={i} className="card p-4 flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}>
+                <s.icon size={18} className={s.color} />
+              </div>
+              <div>
+                <div className="text-xl font-bold text-content">{s.value}</div>
+                <div className="text-xs text-subtle">{s.label}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <select className="input w-48" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+          <input className="input pl-10" placeholder="Search questions, topics, tags..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <select className="input w-40" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           <option value="draft">Draft</option>
           <option value="technical-review">In Review</option>
           <option value="approved">Approved</option>
           <option value="published">Published</option>
           <option value="retired">Retired</option>
+        </select>
+        <select className="input w-40" value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}>
+          <option value="">All Difficulties</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+          <option value="expert">Expert</option>
+        </select>
+        <select className="input w-40" value={trackFilter} onChange={(e) => setTrackFilter(e.target.value)}>
+          <option value="">All Tracks</option>
+          <option value="foundation">Foundation</option>
+          <option value="technical">Technical</option>
+          <option value="applied">Applied</option>
+          <option value="ai-security">AI Security</option>
+          <option value="career">Career</option>
+          <option value="branch-specific">Branch Specific</option>
         </select>
       </div>
 
@@ -76,10 +121,19 @@ export default function Questions() {
                     <span className={`badge-${q.difficulty}`}>{q.difficulty}</span>
                     <span>{q.topic}</span>
                     <span>v{q.currentVersion}</span>
+                    {q.analytics?.totalAttempts > 0 && (
+                      <span className="flex items-center gap-1">
+                        <BarChart3 size={11} /> {q.analytics.totalAttempts} attempts · {Math.round((q.analytics.correctAttempts / q.analytics.totalAttempts) * 100)}% correct
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => toast('Edit not implemented in MVP')} className="btn-ghost p-2"><Edit3 size={14} /></button>
+                  <button onClick={() => toast('Edit not implemented in MVP')} className="btn-ghost p-2" title="Edit"><Edit3 size={14} /></button>
+                  <button
+                    onClick={async () => { try { await api.duplicateQuestion(q._id); toast.success('Duplicated as draft'); load(); } catch (err) { toast.error(err.response?.data?.message); } }}
+                    className="btn-ghost p-2" title="Duplicate"
+                  ><Copy size={14} /></button>
                   <button onClick={async () => { if (confirm('Retire this question?')) { await api.deleteQuestion(q._id); toast.success('Retired'); load(); } }} className="btn-ghost p-2 text-red-600 dark:text-red-400"><Trash2 size={14} /></button>
                 </div>
               </div>

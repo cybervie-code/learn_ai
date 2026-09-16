@@ -55,8 +55,8 @@ export default function Assignments() {
           const isOverdue = due < new Date() && !a.mySubmission;
           return (
             <div key={a._id} className="card p-5">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-content">{a.title}</h3>
                   {a.description && <p className="text-sm text-muted mt-1">{a.description}</p>}
                   <div className="flex items-center gap-3 mt-3 text-xs text-subtle">

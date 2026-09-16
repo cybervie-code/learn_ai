@@ -73,10 +73,10 @@ export const getPublicProfile = asyncHandler(async (req, res) => {
 
   if (!user) throw ApiError.notFound('Public profile not found or not public');
 
-  // Get public attempt stats
+  // Get public attempt stats (for the profile owner — not the viewer)
   const totalAttempts = await Attempt.countDocuments({ user: req.params.id, status: 'finalised' });
   const avgScore = await Attempt.aggregate([
-    { $match: { user: req.user?._id || null, status: 'finalised' } },
+    { $match: { user: user._id, status: 'finalised' } },
     { $group: { _id: null, avg: { $avg: '$percentage' } } },
   ]);
 

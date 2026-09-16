@@ -397,7 +397,7 @@ export const getMyAttempts = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(Number(limit))
-    .select('quizTitle mode status percentage correctCount incorrectCount skippedCount totalPoints earnedPoints xpAwarded startedAt submittedAt');
+    .select('quiz quizTitle mode status percentage correctCount incorrectCount skippedCount totalPoints earnedPoints xpAwarded startedAt submittedAt');
 
   const total = await Attempt.countDocuments(query);
 

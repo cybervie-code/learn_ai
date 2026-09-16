@@ -23,19 +23,27 @@ export const listPaths = asyncHandler(async (req, res) => {
     .populate('competencies', 'name code')
     .lean();
 
-  // Add progress info for logged-in user
+  // Add real progress for logged-in users: a mission counts as completed
+  // when the user has a finalised attempt (>=60%) on that mission's quiz
   if (req.user) {
-    for (const path of paths) {
-      const missionIds = path.missions.map((m) => m.mission);
-      const completedMissions = await Attempt.countDocuments({
+    const allMissionIds = paths.flatMap((p) => p.missions.map((m) => m.mission));
+    const missions = await Mission.find({ _id: { $in: allMissionIds } }).select('quiz').lean();
+    const missionQuiz = {};
+    missions.forEach((m) => { missionQuiz[String(m._id)] = m.quiz; });
+    const quizIds = missions.map((m) => m.quiz).filter(Boolean);
+    const passedQuizIds = new Set(
+      (await Attempt.distinct('quiz', {
         user: req.user._id,
-        quiz: { $in: missionIds }, // this won't work directly; we need mission-based tracking
+        quiz: { $in: quizIds },
         status: 'finalised',
         percentage: { $gte: 60 },
-      });
+      })).map(String)
+    );
+    for (const path of paths) {
+      const done = path.missions.filter((m) => passedQuizIds.has(String(missionQuiz[String(m.mission)]))).length;
       path.progress = {
         totalMissions: path.missions.length,
-        completedMissions: 0, // simplified for MVP
+        completedMissions: done,
       };
     }
   }
@@ -49,12 +57,30 @@ export const getPath = asyncHandler(async (req, res) => {
     .populate('competencies', 'name code')
     .populate({
       path: 'missions.mission',
-      select: 'title slug description estimatedMinutes difficulty icon isPublished status xpReward',
+      select: 'title slug description estimatedMinutes difficulty icon isPublished status xpReward quiz',
     })
     .populate('prerequisites', 'title slug');
 
   if (!path) throw ApiError.notFound('Learning path not found');
-  sendSuccess(res, path, 'Learning path fetched');
+
+  // Flag each mission as completed if the user passed its quiz (>=60%)
+  const obj = path.toObject();
+  if (req.user) {
+    const quizIds = obj.missions.map((m) => m.mission?.quiz).filter(Boolean);
+    const passed = new Set(
+      (await Attempt.distinct('quiz', {
+        user: req.user._id,
+        quiz: { $in: quizIds },
+        status: 'finalised',
+        percentage: { $gte: 60 },
+      })).map(String)
+    );
+    obj.missions.forEach((m) => {
+      m.completed = m.mission?.quiz ? passed.has(String(m.mission.quiz)) : false;
+    });
+  }
+
+  sendSuccess(res, obj, 'Learning path fetched');
 });
 
 // Admin: create learning path

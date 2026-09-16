@@ -6,7 +6,7 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../BrandLogo.jsx';
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }) {
   const { user } = useAuth();
 
   const studentLinks = [
@@ -56,6 +56,7 @@ export default function Sidebar() {
             key={link.to}
             to={link.to}
             end={link.end}
+            onClick={onNavigate}
             className={({ isActive }) => (isActive ? 'sidebar-link-active' : 'sidebar-link')}
           >
             <link.icon size={18} />

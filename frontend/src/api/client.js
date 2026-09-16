@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5055/api';
 
 const client = axios.create({
   baseURL: API_URL,
@@ -63,6 +63,11 @@ export const api = {
   updateQuestion: (id, data) => client.put(`/questions/${id}`, data),
   updateQuestionStatus: (id, status) => client.patch(`/questions/${id}/status`, { status }),
   deleteQuestion: (id) => client.delete(`/questions/${id}`),
+  getQuestionStats: () => client.get('/questions/stats'),
+  getQuestionFacets: () => client.get('/questions/facets'),
+  bulkCreateQuestions: (questions) => client.post('/questions/bulk', { questions }),
+  bulkUpdateQuestionStatus: (ids, status) => client.patch('/questions/bulk-status', { ids, status }),
+  duplicateQuestion: (id) => client.post(`/questions/${id}/duplicate`),
 
   // Quizzes
   listQuizzes: (params) => client.get('/quizzes', { params }),

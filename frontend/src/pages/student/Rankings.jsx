@@ -61,26 +61,26 @@ export default function Rankings() {
         <div className="card overflow-hidden">
           <div className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border text-xs font-medium text-subtle uppercase">
             <div className="col-span-1">Rank</div>
-            <div className="col-span-5">Student</div>
-            <div className="col-span-3">College</div>
+            <div className="col-span-8 sm:col-span-5">Student</div>
+            <div className="hidden sm:block col-span-3">College</div>
             <div className="col-span-2 text-right">XP</div>
             <div className="col-span-1 text-right">Streak</div>
           </div>
           {rankings.map((r) => (
             <div key={r.rank} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface-2/30 items-center">
               <div className="col-span-1 flex items-center justify-center">{getRankBadge(r.rank)}</div>
-              <div className="col-span-5 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-600 dark:text-brand-400 text-xs font-semibold">
+              <div className="col-span-8 sm:col-span-5 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-600 dark:text-brand-400 text-xs font-semibold shrink-0">
                   {r.displayName?.charAt(0)?.toUpperCase() || '?'}
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-content truncate">{r.displayName}</div>
-                  {r.branch && <div className="text-xs text-subtle">{r.branch}</div>}
+                  {r.branch && <div className="text-xs text-subtle truncate">{r.branch}</div>}
                 </div>
               </div>
-              <div className="col-span-3 text-sm text-muted truncate">{r.collegeName || '—'}</div>
+              <div className="hidden sm:block col-span-3 text-sm text-muted truncate">{r.collegeName || '—'}</div>
               <div className="col-span-2 text-right text-sm font-semibold text-brand-600 dark:text-brand-400">{r.learningXP}</div>
-              <div className="col-span-1 text-right flex items-center justify-end gap-1 text-sm text-orange-600 dark:text-orange-600 dark:text-orange-400">
+              <div className="col-span-1 text-right flex items-center justify-end gap-1 text-sm text-orange-600 dark:text-orange-400">
                 <Flame size={12} /> {r.streak?.current || 0}
               </div>
             </div>
@@ -91,19 +91,19 @@ export default function Rankings() {
         <div className="card overflow-hidden">
           <div className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border text-xs font-medium text-subtle uppercase">
             <div className="col-span-1">Rank</div>
-            <div className="col-span-4">College</div>
-            <div className="col-span-3">Location</div>
+            <div className="col-span-7 sm:col-span-4">College</div>
+            <div className="hidden sm:block col-span-3">Location</div>
             <div className="col-span-2 text-right">Students</div>
             <div className="col-span-2 text-right">Total XP</div>
           </div>
           {collegeLeaderboard.map((c) => (
             <div key={c.rank} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border/50 hover:bg-surface-2/30 items-center">
               <div className="col-span-1 flex items-center justify-center">{getRankBadge(c.rank)}</div>
-              <div className="col-span-4">
-                <div className="text-sm font-medium text-content">{c.collegeName}</div>
+              <div className="col-span-7 sm:col-span-4 min-w-0">
+                <div className="text-sm font-medium text-content truncate">{c.collegeName}</div>
                 {c.collegeShortCode && <div className="text-xs text-subtle">{c.collegeShortCode}</div>}
               </div>
-              <div className="col-span-3 text-sm text-muted">{c.collegeCity}, {c.collegeState}</div>
+              <div className="hidden sm:block col-span-3 text-sm text-muted truncate">{c.collegeCity}, {c.collegeState}</div>
               <div className="col-span-2 text-right text-sm text-muted">{c.activeStudents}</div>
               <div className="col-span-2 text-right text-sm font-semibold text-brand-600 dark:text-brand-400">{c.totalXP}</div>
             </div>

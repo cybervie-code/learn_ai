@@ -18,10 +18,17 @@ export default function QuizPlayer() {
   const [submitting, setSubmitting] = useState(false);
   const [phase, setPhase] = useState('quiz'); // quiz -> results
   const [timeLeft, setTimeLeft] = useState(null);
+  const [questionStart, setQuestionStart] = useState(Date.now());
 
   useEffect(() => {
     api.startAttempt(quizId).then((res) => {
-      setAttempt(res.data.data);
+      const a = res.data.data;
+      setAttempt(a);
+      // Resuming an attempt: jump straight to the first unanswered question
+      const firstUnanswered = (a.questionSnapshots || []).findIndex((_, i) =>
+        !(a.responses || []).some((r) => r.questionSnapshotIndex === i)
+      );
+      if (firstUnanswered > 0) setCurrentIndex(firstUnanswered);
       setLoading(false);
     }).catch((err) => {
       toast.error(err.response?.data?.message || 'Failed to start quiz');
@@ -29,9 +36,9 @@ export default function QuizPlayer() {
     });
   }, [quizId]);
 
-  // Timer
+  // Timer — auto-submit on expiry, but only while still on the quiz screen
   useEffect(() => {
-    if (!attempt?.expiresAt) return;
+    if (!attempt?.expiresAt || phase !== 'quiz') return;
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.floor((new Date(attempt.expiresAt) - Date.now()) / 1000));
       setTimeLeft(remaining);
@@ -41,7 +48,7 @@ export default function QuizPlayer() {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [attempt]);
+  }, [attempt, phase]);
 
   const currentQuestion = attempt?.questionSnapshots?.[currentIndex];
   const totalQuestions = attempt?.questionSnapshots?.length || 0;
@@ -63,7 +70,7 @@ export default function QuizPlayer() {
       const res = await api.submitAnswer(attempt._id, {
         questionSnapshotIndex: currentIndex,
         selectedKeys,
-        timeSpent: 30,
+        timeSpent: Math.max(1, Math.round((Date.now() - questionStart) / 1000)),
       });
       setAttempt(res.data.data.attempt); // reveals this question's answers (learning mode)
       setFeedback(res.data.data.feedback);
@@ -79,6 +86,19 @@ export default function QuizPlayer() {
       setCurrentIndex(currentIndex + 1);
       setSelectedKeys([]);
       setFeedback(null);
+      setQuestionStart(Date.now());
+    } else {
+      handleSubmit();
+    }
+  };
+
+  // Skip without submitting — counted as skipped in scoring
+  const handleSkip = () => {
+    if (currentIndex < totalQuestions - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setSelectedKeys([]);
+      setFeedback(null);
+      setQuestionStart(Date.now());
     } else {
       handleSubmit();
     }
@@ -272,17 +292,29 @@ export default function QuizPlayer() {
           })}
         </div>
 
-        {/* Feedback */}
+        {/* Feedback — assessment mode returns no isCorrect, so show a neutral state */}
         {feedback && (
           <div className={`mt-6 p-4 rounded-lg animate-fade-in ${
-            feedback.isCorrect ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'
+            feedback.isCorrect === undefined
+              ? 'bg-surface-2/60 border border-border'
+              : feedback.isCorrect
+              ? 'bg-green-500/10 border border-green-500/20'
+              : 'bg-red-500/10 border border-red-500/20'
           }`}>
             <div className="flex items-center gap-2 mb-2">
-              {feedback.isCorrect
+              {feedback.isCorrect === undefined
+                ? <CheckCircle2 size={18} className="text-muted" />
+                : feedback.isCorrect
                 ? <CheckCircle2 size={18} className="text-green-600 dark:text-green-400" />
                 : <XCircle size={18} className="text-red-600 dark:text-red-400" />}
-              <span className={`font-medium ${feedback.isCorrect ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                {feedback.isCorrect ? 'Correct!' : 'Not quite right'}
+              <span className={`font-medium ${
+                feedback.isCorrect === undefined
+                  ? 'text-content'
+                  : feedback.isCorrect
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}>
+                {feedback.isCorrect === undefined ? 'Answer recorded' : feedback.isCorrect ? 'Correct!' : 'Not quite right'}
               </span>
               {feedback.pointsAwarded > 0 && (
                 <span className="text-xs text-brand-600 dark:text-brand-400 ml-auto">+{feedback.pointsAwarded} points</span>
@@ -301,9 +333,14 @@ export default function QuizPlayer() {
           <ArrowLeft size={16} /> Exit
         </button>
         {!feedback ? (
-          <button onClick={handleSubmitAnswer} disabled={submitting || selectedKeys.length === 0} className="btn-primary flex-1">
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Submit Answer'}
-          </button>
+          <>
+            <button onClick={handleSkip} className="btn-ghost text-sm" disabled={submitting}>
+              Skip
+            </button>
+            <button onClick={handleSubmitAnswer} disabled={submitting || selectedKeys.length === 0} className="btn-primary flex-1">
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Submit Answer'}
+            </button>
+          </>
         ) : (
           <button onClick={handleNext} className="btn-primary flex-1">
             {currentIndex < totalQuestions - 1 ? 'Next Question' : 'Finish Quiz'} <ArrowRight size={16} />

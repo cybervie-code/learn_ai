@@ -16,6 +16,12 @@ import { Question } from '../src/models/Question.js';
 import { Badge } from '../src/models/Badge.js';
 
 async function seed() {
+  // Safety: this script DELETES all data — never run it against production
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
+    console.error('Refusing to seed in production. Set ALLOW_SEED=true to override (this wipes ALL data).');
+    process.exit(1);
+  }
+
   console.log('Connecting to database...');
   await connectDB();
 

@@ -42,10 +42,10 @@ export default function PublicLayout() {
         </div>
 
         {menuOpen && (
-          <div className="md:hidden border-t border-border p-4 space-y-2">
-            <Link to="/paths" className="block text-sm text-muted hover:text-content">Learning Paths</Link>
-            <Link to="/rankings" className="block text-sm text-muted hover:text-content">Rankings</Link>
-            <Link to="/about" className="block text-sm text-muted hover:text-content">About</Link>
+          <div className="md:hidden border-t border-border p-4 space-y-2" onClick={() => setMenuOpen(false)}>
+            <Link to="/paths" className="block text-sm text-muted hover:text-content py-1">Learning Paths</Link>
+            <Link to="/rankings" className="block text-sm text-muted hover:text-content py-1">Rankings</Link>
+            <Link to="/about" className="block text-sm text-muted hover:text-content py-1">About</Link>
             {user ? (
               <Link to="/app" className="btn-primary w-full text-sm">Dashboard</Link>
             ) : (

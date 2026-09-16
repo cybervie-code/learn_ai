@@ -5,7 +5,7 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../BrandLogo.jsx';
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ onNavigate }) {
   const { user } = useAuth();
 
   const canManageTenants = ['superadmin', 'platform-ops'].includes(user?.platformRole);
@@ -37,6 +37,7 @@ export default function AdminSidebar() {
             key={link.to}
             to={link.to}
             end={link.end}
+            onClick={onNavigate}
             className={({ isActive }) => (isActive ? 'sidebar-link-active' : 'sidebar-link')}
           >
             <link.icon size={18} />
