@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api/client.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import toast from 'react-hot-toast';
 import {
   User, Zap, Flame, Trophy, BookOpen, CheckCircle2,
@@ -7,6 +8,8 @@ import {
 } from 'lucide-react';
 
 export default function Profile() {
+  const { user } = useAuth();
+  const isStudent = user?.role === 'student';
   const [profile, setProfile] = useState(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,7 +47,7 @@ export default function Profile() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Profile header */}
-      <div className="card p-8 bg-gradient-to-br from-brand-950/30 to-gray-900">
+      <div className="card p-8 bg-gradient-to-br from-brand-600/10 to-brand-600/5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-600 dark:text-brand-400 text-2xl font-bold">
@@ -67,7 +70,7 @@ export default function Profile() {
 
         {profile.bio && !editing && <p className="text-muted mt-4">{profile.bio}</p>}
 
-        {profile.isProfilePublic && (
+        {isStudent && profile.isProfilePublic && (
           <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">
             <CheckCircle2 size={12} /> Public Profile Active
           </div>
@@ -87,34 +90,43 @@ export default function Profile() {
               <label className="label">Headline</label>
               <input className="input" value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} placeholder="e.g. AI Enthusiast | CSE Student" />
             </div>
-            <div>
-              <label className="label">Branch</label>
-              <input className="input" value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} />
-            </div>
-            <div>
-              <label className="label">Graduation Year</label>
-              <input type="number" className="input" value={form.graduationYear} onChange={(e) => setForm({ ...form, graduationYear: e.target.value })} />
-            </div>
+            {isStudent && (
+              <>
+                <div>
+                  <label className="label">Branch</label>
+                  <input className="input" value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Graduation Year</label>
+                  <input type="number" className="input" value={form.graduationYear} onChange={(e) => setForm({ ...form, graduationYear: e.target.value })} />
+                </div>
+              </>
+            )}
           </div>
           <div>
             <label className="label">Bio</label>
             <textarea className="input" rows={3} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} placeholder="Tell us about yourself..." />
           </div>
-          <div>
-            <label className="label">Public Display Name</label>
-            <input className="input" value={form.publicDisplayName} onChange={(e) => setForm({ ...form, publicDisplayName: e.target.value })} placeholder="Name shown on public profile" />
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.isProfilePublic} onChange={(e) => setForm({ ...form, isProfilePublic: e.target.checked })} className="rounded" />
-            <span className="text-sm text-muted">Make my profile public (visible in rankings)</span>
-          </label>
+          {isStudent && (
+            <>
+              <div>
+                <label className="label">Public Display Name</label>
+                <input className="input" value={form.publicDisplayName} onChange={(e) => setForm({ ...form, publicDisplayName: e.target.value })} placeholder="Name shown on public profile" />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.isProfilePublic} onChange={(e) => setForm({ ...form, isProfilePublic: e.target.checked })} className="rounded" />
+                <span className="text-sm text-muted">Make my profile public (visible in rankings)</span>
+              </label>
+            </>
+          )}
           <button onClick={handleSave} className="btn-primary">
             <Save size={14} /> Save Changes
           </button>
         </div>
       )}
 
-      {/* Stats */}
+      {/* Learning stats — student accounts only */}
+      {isStudent && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Learning XP', value: profile.learningXP || 0, icon: Zap, color: 'text-brand-600 dark:text-brand-400' },
@@ -129,9 +141,10 @@ export default function Profile() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Recent attempts */}
-      {profile.recentAttempts?.length > 0 && (
+      {isStudent && profile.recentAttempts?.length > 0 && (
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-content mb-4 flex items-center gap-2">
             <BookOpen size={18} className="text-brand-600 dark:text-brand-400" /> Recent Activity
@@ -157,7 +170,7 @@ export default function Profile() {
       )}
 
       {/* Badges */}
-      {profile.badges?.length > 0 && (
+      {isStudent && profile.badges?.length > 0 && (
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-content mb-4 flex items-center gap-2">
             <Award size={18} className="text-yellow-600 dark:text-yellow-400" /> Badges

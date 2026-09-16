@@ -1,35 +1,31 @@
-import { Outlet, useNavigate, Navigate } from 'react-router-dom';
-import Sidebar from './Sidebar.jsx';
+import { Outlet, useNavigate } from 'react-router-dom';
+import AdminSidebar from './AdminSidebar.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { LogOut, Bell } from 'lucide-react';
+import { LogOut, ShieldCheck } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle.jsx';
 
-export default function DashboardLayout() {
+export default function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Platform staff never see the student app — send them to the staff console
-  if (user?.platformRole) return <Navigate to="/admin" replace />;
-
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/admin/login');
   };
 
   return (
     <div className="flex min-h-screen bg-surface">
-      <Sidebar />
+      <AdminSidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-border bg-elevated/80 backdrop-blur sticky top-0 z-10 flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-content">College Portal</h1>
+            <h1 className="text-lg font-semibold text-content">Platform Administration</h1>
+            <span className="badge bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/20 text-xs">
+              <ShieldCheck size={12} /> {user?.platformRole}
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <button className="btn-ghost p-2 rounded-lg relative">
-              <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-cyber-400 rounded-full"></span>
-            </button>
             <button onClick={handleLogout} className="btn-ghost p-2 rounded-lg" title="Logout">
               <LogOut size={18} />
             </button>

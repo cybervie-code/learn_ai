@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
@@ -15,6 +15,7 @@ export default function Login() {
   const { login } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [mode, setMode] = useState('login'); // login | register | verify | forgot | reset
   const [email, setEmail] = useState('');
@@ -25,6 +26,22 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+
+  // Invite links land here as /login?invite=<token>&email=someone@college.ac.in
+  // (the invite token is submitted through the reset-password flow).
+  useEffect(() => {
+    const modeParam = searchParams.get('mode');
+    const emailParam = searchParams.get('email');
+    const inviteParam = searchParams.get('invite');
+    if (emailParam) setEmail(emailParam);
+    if (inviteParam && emailParam) {
+      setOtp(inviteParam);
+      setMode('activate');
+    } else if (modeParam === 'forgot' || modeParam === 'reset') {
+      setMode(modeParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -45,7 +62,12 @@ export default function Login() {
     try {
       if (mode === 'login') {
         const res = await api.login(email, password);
-        login(res.data.data.user, res.data.data.token);
+        const loggedInUser = res.data.data.user;
+        if (loggedInUser.platformRole) {
+          toast.error('Staff accounts must sign in through the staff portal at /admin/login');
+          return;
+        }
+        login(loggedInUser, res.data.data.token);
         toast.success(res.data.message);
         navigate('/app');
       } else {
@@ -134,11 +156,36 @@ export default function Login() {
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
       const res = await api.googleLogin(credentialResponse.credential);
-      login(res.data.data.user, res.data.data.token);
+      const googleUser = res.data.data.user;
+      if (googleUser.platformRole) {
+        toast.error('Staff accounts must sign in through the staff portal at /admin/login');
+        return;
+      }
+      login(googleUser, res.data.data.token);
       toast.success(res.data.message || 'Signed in with Google');
       navigate('/app');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Google sign-in failed. Try email/password below.');
+    }
+  };
+
+  const handleActivate = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.resetPassword(email, otp, newPassword);
+      const res = await api.login(email, newPassword);
+      login(res.data.data.user, res.data.data.token);
+      toast.success('Account activated. Welcome to Cybervie!');
+      navigate('/app');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'This invite link may have expired — request a new code below.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -148,6 +195,7 @@ export default function Login() {
     verify: 'Verify Your Email',
     forgot: 'Forgot Password',
     reset: 'Reset Password',
+    activate: 'Welcome to Cybervie',
   };
 
   const subtitles = {
@@ -156,6 +204,7 @@ export default function Login() {
     verify: `Enter the 6-digit code sent to ${email}`,
     forgot: 'Enter your email and we will send you a reset code',
     reset: `Enter the code sent to ${email} and choose a new password`,
+    activate: `Set a password to activate the account for ${email}`,
   };
 
   const resendBlock = (
@@ -420,17 +469,55 @@ export default function Login() {
               {backToLogin}
             </form>
           )}
-        </div>
 
-        {(mode === 'login' || mode === 'register') && (
-          <div className="mt-6 p-4 rounded-lg bg-card/50 border border-border text-xs text-subtle space-y-1">
-            <p className="font-medium text-muted">Demo Credentials:</p>
-            <p>Superadmin: admin@cybervie.in / ChangeMe123!</p>
-            <p>College Admin: admin@demo.iitd.ac.in / Admin123!</p>
-            <p>Faculty: faculty@demo.iitd.ac.in / Faculty123!</p>
-            <p>Student: student1@demo.iitd.ac.in / Student123!</p>
-          </div>
-        )}
+          {mode === 'activate' && (
+            <form onSubmit={handleActivate} className="space-y-4">
+              <div>
+                <label className="label">Create Password</label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="input pl-10"
+                    placeholder="Minimum 8 characters"
+                    minLength={8}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Confirm Password</label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="input pl-10"
+                    placeholder="••••••••"
+                    minLength={8}
+                    required
+                  />
+                </div>
+              </div>
+              <button type="submit" disabled={loading || !otp} className="btn-primary w-full py-3">
+                {loading ? 'Activating...' : 'Activate Account'}
+              </button>
+              <p className="text-center text-sm text-muted mt-4">
+                Link expired?{' '}
+                <button
+                  type="button"
+                  onClick={() => setMode('forgot')}
+                  className="text-brand-600 dark:text-brand-400 hover:text-brand-300 font-medium"
+                >
+                  Send yourself a reset code
+                </button>
+              </p>
+            </form>
+          )}
+        </div>
 
         <Link to="/" className="flex items-center justify-center gap-1 text-sm text-subtle hover:text-muted mt-6">
           <ArrowLeft size={14} /> Back to home

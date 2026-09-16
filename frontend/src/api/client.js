@@ -23,8 +23,9 @@ client.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('cybervie_token');
       localStorage.removeItem('cybervie_user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      const onAuthPage = ['/login', '/admin/login'].includes(window.location.pathname);
+      if (!onAuthPage) {
+        window.location.href = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
       }
     }
     return Promise.reject(error);
@@ -102,6 +103,7 @@ export const api = {
   // Users
   listCollegeUsers: (params) => client.get('/users/college', { params }),
   listAllUsers: (params) => client.get('/users/all', { params }),
+  createUser: (data) => client.post('/users', data),
   updateUserStatus: (id, status) => client.patch(`/users/${id}/status`, { status }),
   updateUserRole: (id, role) => client.patch(`/users/${id}/role`, { role }),
 };

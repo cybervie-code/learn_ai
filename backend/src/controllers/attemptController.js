@@ -18,6 +18,58 @@ function shuffle(arr) {
 }
 
 /**
+ * Strip answer keys from snapshots sent to the client while an attempt is
+ * in progress — otherwise the correct answers are readable in DevTools.
+ * A question's answer is revealed once it has been answered (learning mode)
+ * or the whole attempt is finalised and the quiz's showResults rule allows it.
+ */
+function sanitizeAttempt(attempt, quiz = null) {
+  const obj = attempt.toObject ? attempt.toObject() : attempt;
+  const finalised = obj.status !== 'in-progress';
+  const revealAll = finalised && shouldRevealAnswers(obj, quiz);
+  obj.questionSnapshots = (obj.questionSnapshots || []).map((s, i) => {
+    const answered = (obj.responses || []).some((r) => r.questionSnapshotIndex === i);
+    const reveal = revealAll || (answered && obj.mode === 'learning');
+    return {
+      ...s,
+      correctKeys: reveal ? s.correctKeys : undefined,
+      options: (s.options || []).map((o) => ({
+        ...o,
+        isCorrect: reveal ? o.isCorrect : false,
+        explanation: reveal ? o.explanation : '',
+      })),
+    };
+  });
+  return obj;
+}
+
+function shouldRevealAnswers(attempt, quiz) {
+  if (attempt.mode === 'learning') return true;
+  const showResults = quiz?.rules?.showResults || 'immediate';
+  if (showResults === 'immediate' || showResults === 'after-submit') return true;
+  if (showResults === 'after-deadline') return attempt.expiresAt && new Date() > attempt.expiresAt;
+  return false; // 'manual' — answers are not released automatically
+}
+
+// Bump the daily streak on quiz completion
+async function updateStreak(userId) {
+  const user = await User.findById(userId).select('streak');
+  if (!user) return;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const last = user.streak?.lastActiveDate ? new Date(user.streak.lastActiveDate) : null;
+  if (last) last.setHours(0, 0, 0, 0);
+  if (last && last.getTime() === today.getTime()) return; // already active today
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const current = last && last.getTime() === yesterday.getTime() ? (user.streak?.current || 0) + 1 : 1;
+  user.streak = {
+    current,
+    longest: Math.max(user.streak?.longest || 0, current),
+    lastActiveDate: new Date(),
+  };
+  await user.save();
+}
+
+/**
  * Start a new quiz attempt.
  * Creates immutable snapshots of all questions and options.
  */
@@ -33,19 +85,8 @@ export const startAttempt = asyncHandler(async (req, res) => {
   if (!quiz) throw ApiError.notFound('Quiz not found');
   if (!quiz.isPublished) throw ApiError.badRequest('Quiz is not published');
 
-  // Check max attempts
-  if (quiz.rules.maxAttempts > 0) {
-    const existingAttempts = await Attempt.countDocuments({
-      user: req.user._id,
-      quiz: quizId,
-      status: { $in: ['in-progress', 'submitted', 'scored', 'finalised'] },
-    });
-    if (existingAttempts >= quiz.rules.maxAttempts) {
-      throw ApiError.badRequest(`Maximum attempts (${quiz.rules.maxAttempts}) reached for this quiz`);
-    }
-  }
-
-  // Check for existing in-progress attempt
+  // Resume an in-progress attempt first — before the max-attempts check,
+  // so a resumed attempt doesn't get rejected as a "new" attempt
   const existingInProgress = await Attempt.findOne({
     user: req.user._id,
     quiz: quizId,
@@ -53,8 +94,19 @@ export const startAttempt = asyncHandler(async (req, res) => {
   });
 
   if (existingInProgress) {
-    // Return the existing in-progress attempt
-    return sendSuccess(res, existingInProgress, 'Resuming existing attempt');
+    return sendSuccess(res, sanitizeAttempt(existingInProgress), 'Resuming existing attempt');
+  }
+
+  // Check max attempts (counts every attempt ever started, incl. expired)
+  if (quiz.rules.maxAttempts > 0) {
+    const existingAttempts = await Attempt.countDocuments({
+      user: req.user._id,
+      quiz: quizId,
+      status: { $in: ['in-progress', 'submitted', 'scored', 'finalised', 'expired'] },
+    });
+    if (existingAttempts >= quiz.rules.maxAttempts) {
+      throw ApiError.badRequest(`Maximum attempts (${quiz.rules.maxAttempts}) reached for this quiz`);
+    }
   }
 
   // Build question snapshots
@@ -126,7 +178,7 @@ export const startAttempt = asyncHandler(async (req, res) => {
     details: { quizId, quizTitle: quiz.title },
   });
 
-  sendSuccess(res, attempt, 'Attempt started', 201);
+  sendSuccess(res, sanitizeAttempt(attempt), 'Attempt started', 201);
 });
 
 /**
@@ -201,7 +253,7 @@ export const submitAnswer = asyncHandler(async (req, res) => {
       }
     : { pointsAwarded };
 
-  sendSuccess(res, { attempt, feedback }, 'Answer submitted');
+  sendSuccess(res, { attempt: sanitizeAttempt(attempt, quiz), feedback }, 'Answer submitted');
 });
 
 /**
@@ -214,6 +266,13 @@ export const submitAttempt = asyncHandler(async (req, res) => {
   if (!attempt) throw ApiError.notFound('Attempt not found');
   if (String(attempt.user) !== String(req.user._id)) throw ApiError.forbidden('Not your attempt');
   if (attempt.status !== 'in-progress') throw ApiError.badRequest('Attempt is not in progress');
+  if (attempt.expiresAt && new Date() > attempt.expiresAt) {
+    attempt.status = 'expired';
+    await attempt.save();
+    throw ApiError.badRequest('Attempt has expired');
+  }
+
+  const quiz = await Quiz.findById(attempt.quiz);
 
   // Calculate final score
   let earnedPoints = 0;
@@ -254,16 +313,24 @@ export const submitAttempt = asyncHandler(async (req, res) => {
   attempt.submittedAt = new Date();
   attempt.scoredAt = new Date();
 
-  // Award XP (learning mode only, based on correct answers)
+  // Award XP (learning mode only) — only on the FIRST finalised attempt of
+  // this quiz, otherwise unlimited-retake quizzes become an XP farm
   if (attempt.mode === 'learning') {
-    const xpEarned = correctCount * 10;
-    attempt.xpAwarded = xpEarned;
-
-    // Update user XP
-    await User.findByIdAndUpdate(req.user._id, {
-      $inc: { learningXP: xpEarned },
+    const priorFinalised = await Attempt.countDocuments({
+      user: req.user._id,
+      quiz: attempt.quiz,
+      status: 'finalised',
+      _id: { $ne: attempt._id },
     });
+    const xpEarned = priorFinalised === 0 ? correctCount * 10 : 0;
+    attempt.xpAwarded = xpEarned;
+    if (xpEarned > 0) {
+      await User.findByIdAndUpdate(req.user._id, { $inc: { learningXP: xpEarned } });
+    }
   }
+
+  // Completing a quiz counts as daily activity
+  await updateStreak(req.user._id);
 
   // Update question analytics
   for (const snapshot of attempt.questionSnapshots) {
@@ -292,7 +359,7 @@ export const submitAttempt = asyncHandler(async (req, res) => {
     details: { percentage: attempt.percentage, correctCount, totalQuestions: attempt.questionSnapshots.length },
   });
 
-  sendSuccess(res, attempt, 'Attempt submitted and scored');
+  sendSuccess(res, sanitizeAttempt(attempt, quiz), 'Attempt submitted and scored');
 });
 
 /**
@@ -312,17 +379,8 @@ export const getAttemptResults = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('Not authorized to view this attempt');
   }
 
-  // Reveal correct answers in results
-  const results = {
-    ...attempt.toObject(),
-    questionSnapshots: attempt.questionSnapshots.map((s) => ({
-      ...s,
-      options: s.options.map((o) => ({ ...o, isCorrect: o.isCorrect })),
-      correctKeys: s.correctKeys,
-    })),
-  };
-
-  sendSuccess(res, results, 'Attempt results');
+  const quiz = await Quiz.findById(attempt.quiz);
+  sendSuccess(res, sanitizeAttempt(attempt, quiz), 'Attempt results');
 });
 
 /**

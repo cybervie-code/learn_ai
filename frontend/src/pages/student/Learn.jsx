@@ -33,7 +33,7 @@ export default function Learn() {
           <ArrowRight size={14} className="rotate-180" /> All Paths
         </Link>
 
-        <div className="card p-8 bg-gradient-to-br from-brand-950/30 to-gray-900">
+        <div className="card p-8 bg-gradient-to-br from-brand-600/10 to-brand-600/5">
           <div className="text-5xl mb-4">{path.icon || '🧠'}</div>
           <h1 className="text-3xl font-bold text-content mb-3">{path.title}</h1>
           <p className="text-muted mb-6">{path.description}</p>

@@ -57,3 +57,31 @@ export async function sendOtpEmail(to, otp, purpose) {
 
   await sendEmail({ to, subject, html, text });
 }
+
+/**
+ * Invite email sent when an admin creates an account for someone.
+ * Contains a one-click link so they can set their own password.
+ */
+export async function sendInviteEmail(to, { name, role, collegeName, inviteUrl }) {
+  const roleLabel = role.replace(/-/g, ' ');
+  const subject = 'Cybervie - You have been invited';
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;border-radius:12px;color:#e2e8f0">
+      <h2 style="margin:0 0 8px;color:#818cf8">Cybervie</h2>
+      <h3 style="margin:0 0 12px;color:#e2e8f0">Welcome, ${name}</h3>
+      <p style="margin:0 0 20px;color:#94a3b8">
+        An account has been created for you as <strong style="color:#e2e8f0">${roleLabel}</strong>${collegeName ? ` at <strong style="color:#e2e8f0">${collegeName}</strong>` : ''}.
+        Click the button below to set your password and activate your account.
+      </p>
+      <div style="text-align:center;margin:8px 0 20px">
+        <a href="${inviteUrl}" style="display:inline-block;background:#6366f1;color:#ffffff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold">Activate your account</a>
+      </div>
+      <p style="margin:0 0 8px;color:#64748b;font-size:12px">Or paste this link into your browser:</p>
+      <p style="margin:0 0 16px;word-break:break-all;font-size:12px"><a href="${inviteUrl}" style="color:#818cf8">${inviteUrl}</a></p>
+      <p style="margin:16px 0 0;color:#64748b;font-size:12px">This link works once and expires in 72 hours. If it expires, use "Forgot password" on the sign-in page to activate your account instead.</p>
+    </div>
+  `;
+  const text = `Welcome to Cybervie, ${name}\n\nAn account has been created for you as ${roleLabel}${collegeName ? ` at ${collegeName}` : ''}.\n\nOpen this link to set your password and activate your account:\n${inviteUrl}\n\nThis link works once and expires in 72 hours.`;
+
+  await sendEmail({ to, subject, html, text });
+}

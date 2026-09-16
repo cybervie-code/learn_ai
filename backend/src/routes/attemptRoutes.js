@@ -3,16 +3,18 @@ import {
   startAttempt, submitAnswer, submitAttempt, getAttemptResults, getMyAttempts,
 } from '../controllers/attemptController.js';
 import { authenticate } from '../middleware/auth.js';
+import { authorize } from '../middleware/roles.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
 router.use(authenticate);
 
-router.post('/start', asyncHandler(startAttempt));
-router.post('/:attemptId/answer', asyncHandler(submitAnswer));
-router.post('/:attemptId/submit', asyncHandler(submitAttempt));
-router.get('/me', asyncHandler(getMyAttempts));
-router.get('/:id/results', asyncHandler(getAttemptResults));
+// Quiz attempts are a student-only activity
+router.post('/start', authorize('student'), asyncHandler(startAttempt));
+router.post('/:attemptId/answer', authorize('student'), asyncHandler(submitAnswer));
+router.post('/:attemptId/submit', authorize('student'), asyncHandler(submitAttempt));
+router.get('/me', authorize('student'), asyncHandler(getMyAttempts));
+router.get('/:id/results', authorize('student'), asyncHandler(getAttemptResults));
 
 export default router;

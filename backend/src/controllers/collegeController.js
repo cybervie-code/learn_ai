@@ -77,9 +77,17 @@ export const listColleges = asyncHandler(async (req, res) => {
 
 // Get a single college
 export const getCollege = asyncHandler(async (req, res) => {
-  const college = await College.findById(req.params.id)
+  const isStaff = Boolean(req.user.platformRole);
+  // Non-staff may only view their own college
+  if (!isStaff && String(req.user.college) !== req.params.id) {
+    throw ApiError.forbidden('Cannot view another college');
+  }
+  let query = College.findById(req.params.id)
     .populate('owner', 'name email')
     .populate('admins', 'name email role');
+  // Domain verification secrets are staff-only
+  if (!isStaff) query = query.select('-domains.verificationToken');
+  const college = await query;
   if (!college) throw ApiError.notFound('College not found');
   sendSuccess(res, college, 'College fetched');
 });
@@ -197,6 +205,11 @@ export const removeDomain = asyncHandler(async (req, res) => {
 // Get college stats
 export const getCollegeStats = asyncHandler(async (req, res) => {
   const collegeId = req.params.id;
+
+  // Non-platform users may only read their own college's stats
+  if (!req.user.platformRole && String(req.user.college) !== collegeId) {
+    throw ApiError.forbidden('Cannot view stats for another college');
+  }
   const [studentCount, facultyCount, departmentCount, cohortCount] = await Promise.all([
     User.countDocuments({ college: collegeId, role: 'student', status: 'active' }),
     User.countDocuments({ college: collegeId, role: { $in: ['faculty', 'college-admin', 'college-owner'] }, status: 'active' }),

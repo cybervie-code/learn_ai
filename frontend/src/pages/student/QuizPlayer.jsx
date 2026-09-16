@@ -65,6 +65,7 @@ export default function QuizPlayer() {
         selectedKeys,
         timeSpent: 30,
       });
+      setAttempt(res.data.data.attempt); // reveals this question's answers (learning mode)
       setFeedback(res.data.data.feedback);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit answer');

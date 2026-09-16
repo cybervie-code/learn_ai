@@ -61,7 +61,9 @@ export const listAssignments = asyncHandler(async (req, res) => {
       { cohorts: req.user.cohort },
       { departments: req.user.department },
     ];
-  } else if (req.user.role === 'faculty' || req.user.role === 'college-admin') {
+  } else {
+    // All other college staff roles only see their own college's assignments.
+    // Faculty are further limited to assignments they created.
     query.college = req.user.college;
     if (req.user.role === 'faculty') {
       query.createdBy = req.user._id;

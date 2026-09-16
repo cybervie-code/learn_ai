@@ -20,8 +20,12 @@ function hashOtp(email, otp) {
 /**
  * Create a fresh OTP for (email, purpose), replacing any existing one,
  * and send it by email. Enforces resend cooldown and hourly send cap.
+ * Options:
+ *   send   - false to skip the default email and get the raw code back
+ *   otp    - supply your own code/token instead of a 6-digit OTP
+ *   ttlMs  - custom expiry (e.g. long-lived invite tokens)
  */
-export async function requestOtp(email, purpose) {
+export async function requestOtp(email, purpose, { send = true, otp = null, ttlMs = OTP_TTL_MS } = {}) {
   const normalizedEmail = email.toLowerCase();
   const now = Date.now();
 
@@ -43,13 +47,13 @@ export async function requestOtp(email, purpose) {
     throw ApiError.badRequest('Too many codes requested. Please try again later.');
   }
 
-  const otp = generateOtp();
+  const code = otp || generateOtp();
 
   await OtpToken.findOneAndUpdate(
     { email: normalizedEmail, purpose },
     {
-      otpHash: hashOtp(normalizedEmail, otp),
-      expiresAt: new Date(now + OTP_TTL_MS),
+      otpHash: hashOtp(normalizedEmail, code),
+      expiresAt: new Date(now + ttlMs),
       attempts: 0,
       sendCount,
       firstSentAt: existing && sendCount > 1 ? existing.firstSentAt : new Date(now),
@@ -58,7 +62,8 @@ export async function requestOtp(email, purpose) {
     { upsert: true, new: true }
   );
 
-  await sendOtpEmail(normalizedEmail, otp, purpose);
+  if (send) await sendOtpEmail(normalizedEmail, code, purpose);
+  return code;
 }
 
 /**

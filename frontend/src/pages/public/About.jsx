@@ -39,7 +39,7 @@ export default function About() {
         ))}
       </div>
 
-      <div className="card p-8 bg-gradient-to-br from-brand-950/30 to-gray-900">
+      <div className="card p-8 bg-gradient-to-br from-brand-600/10 to-brand-600/5">
         <h2 className="text-2xl font-bold text-content mb-4">For Colleges</h2>
         <div className="space-y-3">
           {[

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, Brain, Trophy, User, Settings,
-  Building2, FileQuestion, ClipboardList, Users, ShieldCheck, GraduationCap,
+  LayoutDashboard, BookOpen, Brain, Trophy, User,
+  ClipboardList, Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../BrandLogo.jsx';
@@ -18,7 +18,9 @@ export default function Sidebar() {
     { to: '/app/profile', label: 'Profile', icon: User },
   ];
 
-  const facultyLinks = [
+  // All non-student college roles (faculty, department-admin, placement-officer,
+  // read-only-auditor) get the staff view — never learner links
+  const staffLinks = [
     { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/app/assignments', label: 'Assignments', icon: ClipboardList },
     { to: '/app/students', label: 'Students', icon: Users },
@@ -32,18 +34,8 @@ export default function Sidebar() {
     { to: '/app/profile', label: 'Profile', icon: User },
   ];
 
-  const superadminLinks = [
-    { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
-    { to: '/app/colleges', label: 'Colleges', icon: Building2 },
-    { to: '/app/questions', label: 'Questions', icon: FileQuestion },
-    { to: '/app/users', label: 'All Users', icon: Users },
-    { to: '/app/rankings', label: 'Rankings', icon: Trophy },
-    { to: '/app/profile', label: 'Profile', icon: User },
-  ];
-
-  let links = studentLinks;
-  if (user?.platformRole === 'superadmin') links = superadminLinks;
-  else if (user?.role === 'faculty') links = facultyLinks;
+  let links = staffLinks;
+  if (user?.role === 'student') links = studentLinks;
   else if (user?.role === 'college-admin' || user?.role === 'college-owner') links = adminLinks;
 
   return (

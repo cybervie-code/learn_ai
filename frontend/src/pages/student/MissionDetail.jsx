@@ -32,7 +32,7 @@ export default function MissionDetail() {
       </Link>
 
       {/* Mission header */}
-      <div className="card p-8 bg-gradient-to-br from-brand-950/30 to-gray-900">
+      <div className="card p-8 bg-gradient-to-br from-brand-600/10 to-brand-600/5">
         <div className="text-5xl mb-4">{mission.icon || '📘'}</div>
         <h1 className="text-3xl font-bold text-content mb-2">{mission.title}</h1>
         <p className="text-muted mb-6">{mission.description}</p>
@@ -88,7 +88,7 @@ export default function MissionDetail() {
 
       {/* Start quiz */}
       {mission.quiz && (
-        <div className="card p-6 bg-gradient-to-br from-cyber-950/30 to-gray-900 border-cyber-600/30">
+        <div className="card p-6 bg-gradient-to-br from-cyber-500/10 to-cyber-500/5 border-cyber-500/30">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-content">Ready to test your knowledge?</h2>
