@@ -22,9 +22,20 @@ const app = express();
 // Security
 app.use(helmet());
 
-// CORS
+// CORS — CLIENT_URL may hold a comma-separated list of allowed origins
+// (e.g. the deployed frontend + localhost dev)
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim().replace(/\/$/, ''));
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin(origin, cb) {
+    // Allow same-origin/server-side requests (no Origin header) and listed origins
+    if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+      return cb(null, true);
+    }
+    return cb(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
 }));
 
