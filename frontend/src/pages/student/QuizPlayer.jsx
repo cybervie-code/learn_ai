@@ -224,9 +224,9 @@ export default function QuizPlayer() {
                       {opt.isCorrect && ' ✓'}
                     </div>
                   ))}
-                  {q.options.find((o) => o.isCorrect)?.explanation && (
+                  {(q.explanation || q.options.find((o) => o.isCorrect)?.explanation) && (
                     <p className="text-xs text-subtle ml-6 mt-2 italic">
-                      {q.options.find((o) => o.isCorrect)?.explanation}
+                      {q.explanation || q.options.find((o) => o.isCorrect)?.explanation}
                     </p>
                   )}
                 </div>
@@ -294,7 +294,10 @@ export default function QuizPlayer() {
             const option = currentQuestion.options.find((o) => o.key === key);
             if (!option) return null;
             const isSelected = selectedKeys.includes(key);
-            const showResult = feedback && (option.isCorrect || isSelected);
+            // Red/green only mean something once correctness is actually
+            // revealed — assessment mode just records the answer, so a
+            // submitted selection stays neutral instead of looking wrong.
+            const revealed = !!feedback && feedback.isCorrect !== undefined;
 
             return (
               <button
@@ -302,7 +305,11 @@ export default function QuizPlayer() {
                 onClick={() => handleSelect(key)}
                 disabled={!!feedback}
                 className={`w-full p-4 rounded-lg border text-left transition-all flex items-center gap-3 ${
-                  feedback
+                  !feedback
+                    ? isSelected
+                      ? 'border-brand-500 bg-brand-500/10'
+                      : 'border-border-strong hover:border-border-strong hover:bg-surface-2/50'
+                    : revealed
                     ? option.isCorrect
                       ? 'border-green-600 bg-green-500/10'
                       : isSelected
@@ -310,11 +317,15 @@ export default function QuizPlayer() {
                       : 'border-border opacity-50'
                     : isSelected
                     ? 'border-brand-500 bg-brand-500/10'
-                    : 'border-border-strong hover:border-border-strong hover:bg-surface-2/50'
+                    : 'border-border opacity-60'
                 }`}
               >
                 <span className={`w-7 h-7 ${isMulti ? 'rounded-md' : 'rounded-full'} flex items-center justify-center text-sm font-medium shrink-0 ${
-                  feedback
+                  !feedback
+                    ? isSelected
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-surface-2 text-muted'
+                    : revealed
                     ? option.isCorrect
                       ? 'bg-green-500 text-white'
                       : isSelected
@@ -322,9 +333,9 @@ export default function QuizPlayer() {
                       : 'bg-surface-2 text-subtle'
                     : isSelected
                     ? 'bg-brand-600 text-white'
-                    : 'bg-surface-2 text-muted'
+                    : 'bg-surface-2 text-subtle'
                 }`}>
-                  {feedback && option.isCorrect ? '✓' : feedback && isSelected && !option.isCorrect ? '✗' : option.key}
+                  {revealed && option.isCorrect ? '✓' : revealed && isSelected && !option.isCorrect ? '✗' : option.key}
                 </span>
                 <span className="text-sm text-content flex-1">{option.text}</span>
               </button>

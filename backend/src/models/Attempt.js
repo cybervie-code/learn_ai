@@ -20,6 +20,9 @@ const questionSnapshotSchema = new Schema({
     explanation: String,
   }],
   correctKeys: [String],
+  // Question-level explanation (version-level on the source question).
+  // Hidden by sanitizeAttempt until the attempt's reveal rules allow it.
+  explanation: { type: String, default: '' },
   points: { type: Number, default: 10 },
   optionOrder: [String], // shuffled order
   competency: Schema.Types.ObjectId,

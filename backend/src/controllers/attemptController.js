@@ -28,16 +28,23 @@ function sanitizeAttempt(attempt, quiz = null) {
   const obj = attempt.toObject ? attempt.toObject() : attempt;
   const finalised = obj.status !== 'in-progress';
   const revealAll = finalised && shouldRevealAnswers(obj, quiz);
+  // Mirrors the feedback rule in submitAnswer: an answered question reveals
+  // its answer in learning mode, or whenever the quiz gives immediate results.
+  const revealAnswered = obj.mode === 'learning' || quiz?.rules?.showResults === 'immediate';
   obj.questionSnapshots = (obj.questionSnapshots || []).map((s, i) => {
     const answered = (obj.responses || []).some((r) => r.questionSnapshotIndex === i);
-    const reveal = revealAll || (answered && obj.mode === 'learning');
+    const reveal = revealAll || (answered && revealAnswered);
+    // Snapshot options store isCorrect=false for non-learning modes — the
+    // truth lives in correctKeys, so rebuild the flags from it on reveal.
+    const correctKeys = s.correctKeys || [];
     return {
       ...s,
       correctKeys: reveal ? s.correctKeys : undefined,
+      explanation: reveal ? s.explanation || '' : '',
       options: (s.options || []).map((o) => ({
         ...o,
-        isCorrect: reveal ? o.isCorrect : false,
-        explanation: reveal ? o.explanation : '',
+        isCorrect: reveal ? correctKeys.includes(o.key) : false,
+        explanation: reveal ? o.explanation || '' : '',
       })),
     };
   });
@@ -101,7 +108,7 @@ export const startAttempt = asyncHandler(async (req, res) => {
   });
 
   if (existingInProgress) {
-    return sendSuccess(res, sanitizeAttempt(existingInProgress), 'Resuming existing attempt');
+    return sendSuccess(res, sanitizeAttempt(existingInProgress, quiz), 'Resuming existing attempt');
   }
 
   // Check max attempts (counts every attempt ever started, incl. expired)
@@ -151,6 +158,7 @@ export const startAttempt = asyncHandler(async (req, res) => {
         explanation: quiz.rules.mode === 'learning' ? o.explanation : '',
       })),
       correctKeys,
+      explanation: currentVersion.explanation || '',
       points: qRef.points,
       optionOrder,
       competency: question.competency,
@@ -190,7 +198,7 @@ export const startAttempt = asyncHandler(async (req, res) => {
     details: { quizId, quizTitle: quiz.title },
   });
 
-  sendSuccess(res, sanitizeAttempt(attempt), 'Attempt started', 201);
+  sendSuccess(res, sanitizeAttempt(attempt, quiz), 'Attempt started', 201);
 });
 
 /**
@@ -260,7 +268,7 @@ export const submitAnswer = asyncHandler(async (req, res) => {
     ? {
         isCorrect,
         correctKeys: quiz.rules.mode === 'learning' ? correctKeys : undefined,
-        explanation: quiz.rules.mode === 'learning' ? snapshot.options.find((o) => o.isCorrect)?.explanation : undefined,
+        explanation: quiz.rules.mode === 'learning' ? (snapshot.explanation || snapshot.options.find((o) => correctKeys.includes(o.key))?.explanation) : undefined,
         pointsAwarded,
       }
     : { pointsAwarded };
