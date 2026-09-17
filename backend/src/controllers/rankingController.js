@@ -6,7 +6,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
  * Global leaderboard - top students by learning XP
- * Only includes users with public profiles or anonymous IDs
+ * Names are always shown (publicDisplayName or real name); other profile
+ * fields stay masked unless the student opted into a public profile.
  */
 export const getGlobalRankings = asyncHandler(async (req, res) => {
   const { page = 1, limit = 50, scope = 'global' } = req.query;
@@ -48,10 +49,10 @@ export const getGlobalRankings = asyncHandler(async (req, res) => {
 
   const rankedUsers = await User.aggregate(pipeline);
 
-  // Mask non-public profiles
+  // Names are always public on the leaderboard; profile details stay masked
   const ranked = rankedUsers.map((u, index) => ({
     rank: skip + index + 1,
-    displayName: u.isProfilePublic ? (u.publicDisplayName || u.name) : `AI Learner #${u._id.toString().slice(-4)}`,
+    displayName: (u.publicDisplayName || '').trim() || u.name,
     avatarUrl: u.isProfilePublic ? u.avatarUrl : '',
     learningXP: u.learningXP,
     streak: u.streak,
@@ -96,7 +97,7 @@ export const getCollegeRankings = asyncHandler(async (req, res) => {
 
   const ranked = rankedUsers.map((u, index) => ({
     rank: skip + index + 1,
-    displayName: u.isProfilePublic ? (u.publicDisplayName || u.name) : `AI Learner #${u._id.toString().slice(-4)}`,
+    displayName: (u.publicDisplayName || '').trim() || u.name,
     avatarUrl: u.isProfilePublic ? u.avatarUrl : '',
     learningXP: u.learningXP,
     streak: u.streak,
