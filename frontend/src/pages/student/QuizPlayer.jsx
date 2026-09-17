@@ -294,9 +294,10 @@ export default function QuizPlayer() {
             const option = currentQuestion.options.find((o) => o.key === key);
             if (!option) return null;
             const isSelected = selectedKeys.includes(key);
-            // Red/green only mean something once correctness is actually
-            // revealed — assessment mode just records the answer, so a
-            // submitted selection stays neutral instead of looking wrong.
+            // Once an answer is submitted, colour the pick by right/wrong.
+            // The correct option itself is only highlighted when the backend
+            // reveals answer flags (learning mode / immediate results) —
+            // otherwise retakes would get the key for free.
             const revealed = !!feedback && feedback.isCorrect !== undefined;
 
             return (
@@ -310,10 +311,12 @@ export default function QuizPlayer() {
                       ? 'border-brand-500 bg-brand-500/10'
                       : 'border-border-strong hover:border-border-strong hover:bg-surface-2/50'
                     : revealed
-                    ? option.isCorrect
+                    ? isSelected
+                      ? feedback.isCorrect
+                        ? 'border-green-600 bg-green-500/10'
+                        : 'border-red-600 bg-red-500/10'
+                      : option.isCorrect
                       ? 'border-green-600 bg-green-500/10'
-                      : isSelected
-                      ? 'border-red-600 bg-red-500/10'
                       : 'border-border opacity-50'
                     : isSelected
                     ? 'border-brand-500 bg-brand-500/10'
@@ -326,16 +329,22 @@ export default function QuizPlayer() {
                       ? 'bg-brand-600 text-white'
                       : 'bg-surface-2 text-muted'
                     : revealed
-                    ? option.isCorrect
+                    ? isSelected
+                      ? feedback.isCorrect
+                        ? 'bg-green-500 text-white'
+                        : 'bg-red-500 text-white'
+                      : option.isCorrect
                       ? 'bg-green-500 text-white'
-                      : isSelected
-                      ? 'bg-red-500 text-white'
                       : 'bg-surface-2 text-subtle'
                     : isSelected
                     ? 'bg-brand-600 text-white'
                     : 'bg-surface-2 text-subtle'
                 }`}>
-                  {revealed && option.isCorrect ? '✓' : revealed && isSelected && !option.isCorrect ? '✗' : option.key}
+                  {revealed
+                    ? isSelected
+                      ? feedback.isCorrect ? '✓' : '✗'
+                      : option.isCorrect ? '✓' : option.key
+                    : option.key}
                 </span>
                 <span className="text-sm text-content flex-1">{option.text}</span>
               </button>
@@ -343,7 +352,7 @@ export default function QuizPlayer() {
           })}
         </div>
 
-        {/* Feedback — assessment mode returns no isCorrect, so show a neutral state */}
+        {/* Feedback — isCorrect is always returned; undefined only on an older API */}
         {feedback && (
           <div className={`mt-6 p-4 rounded-lg animate-fade-in ${
             feedback.isCorrect === undefined

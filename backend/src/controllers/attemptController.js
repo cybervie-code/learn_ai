@@ -264,6 +264,9 @@ export const submitAnswer = asyncHandler(async (req, res) => {
   const quiz = await Quiz.findById(attempt.quiz);
   const showFeedback = quiz.rules.mode === 'learning' || quiz.rules.showResults === 'immediate';
 
+  // Always report right/wrong for the submitted pick — that's the student's
+  // own answer. correctKeys/explanation stay gated so assessment retakes
+  // don't get the key for free.
   const feedback = showFeedback
     ? {
         isCorrect,
@@ -271,7 +274,7 @@ export const submitAnswer = asyncHandler(async (req, res) => {
         explanation: quiz.rules.mode === 'learning' ? (snapshot.explanation || snapshot.options.find((o) => correctKeys.includes(o.key))?.explanation) : undefined,
         pointsAwarded,
       }
-    : { pointsAwarded };
+    : { isCorrect, pointsAwarded };
 
   sendSuccess(res, { attempt: sanitizeAttempt(attempt, quiz), feedback }, 'Answer submitted');
 });
