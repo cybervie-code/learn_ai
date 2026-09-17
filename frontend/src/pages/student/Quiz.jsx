@@ -94,6 +94,8 @@ export default function Quiz() {
         const aFinal = !a.mission;
         const bFinal = !b.mission;
         if (aFinal !== bFinal) return aFinal ? 1 : -1;
+        // Checkpoints by lesson order; tiered finals by level
+        if (aFinal) return (a.level ?? 1) - (b.level ?? 1);
         return (a.mission?.order ?? 0) - (b.mission?.order ?? 0);
       });
       const bestOf = (q) => attemptsByQuiz[String(q._id)]?.best ?? 0;
@@ -398,6 +400,9 @@ function AssessmentCard({ quiz: q, fallbackIndex, index = 0, stat, upNext, locke
               <span className="flex items-center gap-1"><Clock size={11} /> {q.estimatedMinutes}m</span>
               <span>{q.totalQuestions}q</span>
               <span className={DIFF_TEXT[q.difficulty] || 'text-subtle'}>{q.difficulty}</span>
+              {(q.rules?.negativeMarking || 0) > 0 && (
+                <span className="text-amber-600/90 dark:text-amber-400/90">−{Math.round(q.rules.negativeMarking * 100)}% per wrong</span>
+              )}
             </span>
             <span className={`flex items-center gap-1 font-medium shrink-0 transition-colors ${
               attempted ? 'text-muted group-hover:text-content' : 'text-brand-600 dark:text-brand-400'
@@ -421,12 +426,17 @@ function FinalBanner({ quiz: q, index = 0, stat, upNext, locked = false, remaini
   const passed = best >= PASS_MARK;
   const passPct = q.rules?.passingScore ?? PASS_MARK;
   const minutes = q.rules?.timeLimit ? Math.round(q.rules.timeLimit / 60) : q.estimatedMinutes;
+  const level = q.level ?? 1;
+  // Checkpoints all passed but a lower-level final is still unpassed
+  const gatedByFinal = locked && remaining === 0;
 
   const poke = () => {
     setShaking(true);
     setTimeout(() => setShaking(false), 500);
     toast(
-      `Locked — clear ${remaining} more checkpoint${remaining === 1 ? '' : 's'} to unlock the final`,
+      gatedByFinal
+        ? `Locked — pass the Level ${level - 1} final to unlock`
+        : `Locked — clear ${remaining} more checkpoint${remaining === 1 ? '' : 's'} to unlock the final`,
       { icon: '🔒' }
     );
   };
@@ -449,14 +459,17 @@ function FinalBanner({ quiz: q, index = 0, stat, upNext, locked = false, remaini
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Final Assessment</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Final Assessment · Level {level}</span>
               <span className="badge bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-[10px]">
                 <Lock size={9} /> Locked
               </span>
             </div>
             <h3 className="font-semibold text-sm text-content truncate mt-1">{q.title}</h3>
             <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-0.5">
-              Clear {remaining} more checkpoint{remaining === 1 ? '' : 's'} to unlock · {q.totalQuestions} questions
+              {gatedByFinal
+                ? `Pass the Level ${level - 1} final to unlock`
+                : `Clear ${remaining} more checkpoint${remaining === 1 ? '' : 's'} to unlock`} · {q.totalQuestions} questions
+              {(q.rules?.negativeMarking || 0) > 0 && ` · −${Math.round(q.rules.negativeMarking * 100)}% per wrong`}
             </p>
           </div>
           <Trophy size={20} className="text-amber-500/25 shrink-0 hidden sm:block" aria-hidden />
@@ -491,7 +504,7 @@ function FinalBanner({ quiz: q, index = 0, stat, upNext, locked = false, remaini
         <div className="flex-1 min-w-[200px]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">
-              Final Assessment
+              Final Assessment · Level {level}
             </span>
             {upNext && !passed && (
               <span className="badge bg-amber-500 text-white text-[10px]">Up next</span>
@@ -510,6 +523,10 @@ function FinalBanner({ quiz: q, index = 0, stat, upNext, locked = false, remaini
             <span>{q.totalQuestions} questions</span>
             <span className="flex items-center gap-1"><Clock size={11} /> {minutes}m</span>
             <span>{passPct}% to pass</span>
+            {(q.rules?.maxAttempts || 0) > 0 && <span>{q.rules.maxAttempts} attempts max</span>}
+            {(q.rules?.negativeMarking || 0) > 0 && (
+              <span className="text-amber-600/90 dark:text-amber-400/90">−{Math.round(q.rules.negativeMarking * 100)}% per wrong · skip = 0</span>
+            )}
           </p>
         </div>
 

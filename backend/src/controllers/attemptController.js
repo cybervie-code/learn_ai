@@ -135,18 +135,22 @@ export const startAttempt = asyncHandler(async (req, res) => {
       optionOrder = shuffle(optionOrder);
     }
 
+    const correctKeys = currentVersion.options.filter((o) => o.isCorrect).map((o) => o.key);
+
     questionSnapshots.push({
       questionId: question._id,
       questionVersion: currentVersion.version,
       questionText: currentVersion.questionText,
       questionType: question.questionType,
+      scenario: currentVersion.scenario || '',
+      selectionCount: Math.max(1, correctKeys.length),
       options: currentVersion.options.map((o) => ({
         key: o.key,
         text: o.text,
         isCorrect: quiz.rules.mode === 'learning' ? o.isCorrect : false, // hide correct in assessment mode
         explanation: quiz.rules.mode === 'learning' ? o.explanation : '',
       })),
-      correctKeys: currentVersion.options.filter((o) => o.isCorrect).map((o) => o.key),
+      correctKeys,
       points: qRef.points,
       optionOrder,
       competency: question.competency,
@@ -166,6 +170,7 @@ export const startAttempt = asyncHandler(async (req, res) => {
     quizVersion: quiz.version,
     quizTitle: quiz.title,
     mode: quiz.rules.mode,
+    negativeMarking: quiz.rules.negativeMarking || 0,
     questionSnapshots,
     status: 'in-progress',
     startedAt: new Date(),
@@ -281,7 +286,10 @@ export const submitAttempt = asyncHandler(async (req, res) => {
 
   const quiz = await Quiz.findById(attempt.quiz);
 
-  // Calculate final score
+  // Calculate final score. Negative marking deducts a fraction of each
+  // question's points for wrong answers only — skipped questions always
+  // score 0. The ratio is the one frozen on the attempt at start time.
+  const negativeRatio = attempt.negativeMarking || 0;
   let earnedPoints = 0;
   let correctCount = 0;
   let incorrectCount = 0;
@@ -305,11 +313,18 @@ export const submitAttempt = asyncHandler(async (req, res) => {
         earnedPoints += snapshot.points;
       } else {
         incorrectCount++;
+        const penalty = snapshot.points * negativeRatio;
+        if (penalty > 0) {
+          earnedPoints -= penalty;
+          response.pointsAwarded = -penalty;
+        }
       }
       totalTimeSpent += response.timeSpent || 0;
     }
   }
 
+  // A student's score can never drop below zero overall
+  earnedPoints = Math.max(0, Math.round(earnedPoints * 100) / 100);
   attempt.earnedPoints = earnedPoints;
   attempt.percentage = attempt.totalPoints > 0 ? Math.round((earnedPoints / attempt.totalPoints) * 100) : 0;
   attempt.correctCount = correctCount;
@@ -363,7 +378,7 @@ export const submitAttempt = asyncHandler(async (req, res) => {
     resource: 'Attempt',
     resourceId: attempt._id,
     college: req.user.college,
-    details: { percentage: attempt.percentage, correctCount, totalQuestions: attempt.questionSnapshots.length },
+    details: { percentage: attempt.percentage, correctCount, incorrectCount, skippedCount, negativeMarking: negativeRatio, totalQuestions: attempt.questionSnapshots.length },
   });
 
   sendSuccess(res, sanitizeAttempt(attempt, quiz), 'Attempt submitted and scored');

@@ -28,10 +28,13 @@ function pathStats(path) {
   const done = path.progress?.completedMissions ?? lessons.filter((m) => m.completed).length;
   const next = lessons.find((m) => !m.completed) || null;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const final = path.finalAssessment || null;
-  const finalPassed = Boolean(final?.passed);
+  // Paths can have several tiered finals; fall back to the legacy single key
+  const finals = path.finalAssessments?.length
+    ? path.finalAssessments
+    : path.finalAssessment ? [path.finalAssessment] : [];
+  const nextFinal = finals.find((f) => !f.passed) || null;
   const lessonsDone = total > 0 && done >= total;
-  return { lessons, total, done, next, pct, final, finalPassed, lessonsDone };
+  return { lessons, total, done, next, pct, finals, nextFinal, lessonsDone };
 }
 
 export default function Learn() {
@@ -61,7 +64,7 @@ export default function Learn() {
   const resumePath = useMemo(() => {
     const inProgress = paths.find((p) => {
       const s = pathStats(p);
-      return (s.done > 0 && s.next) || (s.lessonsDone && s.final && !s.finalPassed);
+      return (s.done > 0 && s.next) || (s.lessonsDone && s.nextFinal);
     });
     if (inProgress) return inProgress;
     const fresh = paths.find((p) => p.isFeatured && pathStats(p).next)
@@ -73,7 +76,7 @@ export default function Learn() {
 
   /* ================= Path detail ================= */
   if (slug && path) {
-    const { lessons, total, done, next, pct, final, finalPassed } = pathStats(path);
+    const { lessons, total, done, next, pct, finals, nextFinal } = pathStats(path);
     const nextIdx = lessons.findIndex((m) => !m.completed);
 
     return (
@@ -121,14 +124,14 @@ export default function Learn() {
             <h2 className="font-semibold text-content text-sm uppercase tracking-wider">Course track</h2>
             {next ? (
               <span className="text-xs text-subtle">Next up: Lesson {nextIdx + 1}</span>
-            ) : final && !finalPassed ? (
-              <span className="text-xs text-subtle">Next up: Final Assessment</span>
+            ) : nextFinal ? (
+              <span className="text-xs text-subtle">Next up: Level {nextFinal.level ?? 1} Final</span>
             ) : null}
           </div>
-          {lessons.length === 0 && !final ? (
+          {lessons.length === 0 && finals.length === 0 ? (
             <div className="p-8 text-center text-subtle text-sm">No lessons in this path yet.</div>
           ) : (
-            <LessonTrack lessons={lessons} final={final} pathSlug={path.slug} />
+            <LessonTrack lessons={lessons} finals={finals} pathSlug={path.slug} />
           )}
         </div>
       </div>
@@ -192,9 +195,9 @@ export default function Learn() {
 /* ================= Components ================= */
 
 function ResumeHero({ path }) {
-  const { total, done, next, pct, final, finalPassed, lessonsDone } = pathStats(path);
+  const { total, done, next, pct, nextFinal, lessonsDone } = pathStats(path);
   const started = done > 0;
-  const examReady = lessonsDone && final && !finalPassed;
+  const examReady = lessonsDone && nextFinal;
 
   return (
     <div className="card overflow-hidden">
@@ -215,7 +218,7 @@ function ResumeHero({ path }) {
               </p>
             ) : examReady ? (
               <p className="text-sm text-muted mt-0.5">
-                All lessons complete — finish with the <span className="text-content font-medium">{final.totalQuestions}-question final assessment</span>
+                All lessons complete — finish with the <span className="text-content font-medium">{nextFinal.totalQuestions}-question Level {nextFinal.level ?? 1} final</span>
               </p>
             ) : null}
             <div className="mt-3">
@@ -234,11 +237,11 @@ function ResumeHero({ path }) {
             </Link>
           ) : examReady ? (
             <Link
-              to={`/app/quiz/${final._id}`}
+              to={`/app/quiz/${nextFinal._id}`}
               state={{ from: 'path', pathSlug: path.slug }}
               className="btn-primary shrink-0 justify-center sm:w-44"
             >
-              <Trophy size={15} /> Take final exam
+              <Trophy size={15} /> Take Level {nextFinal.level ?? 1} final
             </Link>
           ) : (
             <Link to={`/app/learn/${path.slug}`} className="btn-secondary shrink-0 justify-center sm:w-44">
@@ -252,9 +255,9 @@ function ResumeHero({ path }) {
 }
 
 function PathSection({ path }) {
-  const { lessons, total, done, pct, final, finalPassed, lessonsDone } = pathStats(path);
-  const complete = lessonsDone && (!final || finalPassed);
-  const examPending = lessonsDone && final && !finalPassed;
+  const { lessons, total, done, pct, finals, nextFinal, lessonsDone } = pathStats(path);
+  const complete = lessonsDone && !nextFinal;
+  const examPending = lessonsDone && Boolean(nextFinal);
 
   return (
     <section className="card overflow-hidden">
@@ -276,7 +279,7 @@ function PathSection({ path }) {
             )}
             {examPending && (
               <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-xs">
-                <Trophy size={11} /> Final exam left
+                <Trophy size={11} /> Level {nextFinal.level ?? 1} final left
               </span>
             )}
           </div>
@@ -293,22 +296,21 @@ function PathSection({ path }) {
         </div>
       </Link>
 
-      {/* Lesson steps + final assessment node */}
-      {(lessons.length > 0 || final) && (
+      {/* Lesson steps + final assessment nodes */}
+      {(lessons.length > 0 || finals.length > 0) && (
         <div className="px-5 pb-5">
-          <LessonTrack lessons={lessons} final={final} pathSlug={path.slug} />
+          <LessonTrack lessons={lessons} finals={finals} pathSlug={path.slug} />
         </div>
       )}
     </section>
   );
 }
 
-function LessonTrack({ lessons, final = null, pathSlug = null }) {
+function LessonTrack({ lessons, finals = [], pathSlug = null }) {
   const [shaking, setShaking] = useState(null);
   const nextIdx = lessons.findIndex((m) => !m.completed);
   const lessonsDone = lessons.length > 0 && nextIdx === -1;
-  const finalLocked = final ? (final.locked ?? !lessonsDone) : false;
-  const finalIsNext = Boolean(final) && lessonsDone && !final.passed;
+  const nextFinal = finals.find((f) => !f.passed) || null;
 
   // Locked rows give playful feedback instead of navigating
   const pokeLocked = (key, msg) => {
@@ -325,7 +327,7 @@ function LessonTrack({ lessons, final = null, pathSlug = null }) {
         const isNext = !completed && i === nextIdx;
         // Server-provided flag, with a local fallback for older payloads
         const locked = m.locked ?? (nextIdx !== -1 && i > nextIdx);
-        const last = i === lessons.length - 1 && !final;
+        const last = i === lessons.length - 1 && finals.length === 0;
         const rowKey = m._id || lesson._id || i;
         return (
           <li key={rowKey} className="relative">
@@ -422,86 +424,107 @@ function LessonTrack({ lessons, final = null, pathSlug = null }) {
         );
       })}
 
-      {/* Final assessment — the journey's destination */}
-      {final && (
-        <li className="relative">
-          {finalLocked && !final.passed ? (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => pokeLocked('final', 'Locked — pass every lesson checkpoint to unlock the final')}
-              onKeyDown={(e) => e.key === 'Enter' && pokeLocked('final', 'Locked — pass every lesson checkpoint to unlock the final')}
-              className={`relative flex items-center gap-4 px-2 py-3 rounded-lg cursor-not-allowed select-none ${
-                shaking === 'final' ? 'animate-lock-shake' : ''
-              }`}
-            >
-              <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border z-10 bg-surface-2 border-border-strong text-subtle">
-                <Lock size={14} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-medium text-sm truncate text-subtle">{final.title}</h4>
-                  <span className="badge bg-surface-2 text-subtle border border-border-strong text-[10px] shrink-0">
-                    <Lock size={9} /> Locked
-                  </span>
+      {/* Final assessments — the journey's destination, tiered by level */}
+      {finals.map((f, fi) => {
+        const level = f.level ?? 1;
+        // Server sends locked; fall back to local sequencing for old payloads
+        const fLocked = f.locked ?? (!lessonsDone || finals.slice(0, fi).some((x) => !x.passed));
+        const fIsNext = lessonsDone && nextFinal && String(f._id) === String(nextFinal._id);
+        const rowKey = `final-${f._id || fi}`;
+        const lockMsg = !lessonsDone
+          ? 'Locked — pass every lesson checkpoint to unlock the final'
+          : `Locked — pass the Level ${level - 1} final to unlock`;
+        const lastItem = fi === finals.length - 1;
+        return (
+          <li key={rowKey} className="relative">
+            {!lastItem && (
+              <span
+                aria-hidden="true"
+                className={`absolute left-[25px] top-10 -bottom-1 border-l-2 ${
+                  f.passed ? 'border-green-500/40 border-solid' : fLocked ? 'border-border border-dashed' : 'border-border border-solid'
+                }`}
+              />
+            )}
+            {fLocked && !f.passed ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => pokeLocked(rowKey, lockMsg)}
+                onKeyDown={(e) => e.key === 'Enter' && pokeLocked(rowKey, lockMsg)}
+                className={`relative flex items-center gap-4 px-2 py-3 rounded-lg cursor-not-allowed select-none ${
+                  shaking === rowKey ? 'animate-lock-shake' : ''
+                }`}
+              >
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border z-10 bg-surface-2 border-border-strong text-subtle">
+                  <Lock size={14} />
                 </div>
-                <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
-                  <span className="flex items-center gap-1"><Trophy size={10} /> Final Assessment</span>
-                  <span>{final.totalQuestions} questions</span>
-                  <span>unlocks when all checkpoints pass</span>
-                </p>
-              </div>
-            </div>
-          ) : (
-            <Link
-              to={`/app/quiz/${final._id}`}
-              state={{ from: 'path', pathSlug }}
-              className={`relative flex items-center gap-4 px-2 py-3 rounded-lg transition-colors group ${
-                finalIsNext ? 'bg-yellow-500/5' : 'hover:bg-surface-2/40'
-              }`}
-            >
-              <div className="relative w-9 h-9 shrink-0">
-                {finalIsNext && (
-                  <span aria-hidden="true" className="absolute inset-0 rounded-full bg-yellow-500 animate-ping opacity-40" />
-                )}
-                <div className={`relative w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border z-10 ${
-                  final.passed
-                    ? 'bg-green-500/15 border-green-500/30 text-green-600 dark:text-green-400'
-                    : finalIsNext
-                    ? 'bg-yellow-500 border-yellow-500 text-white animate-pulse-glow'
-                    : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400'
-                }`}>
-                  {final.passed ? <CheckCircle2 size={17} className="animate-unlock-pop" /> : <Trophy size={16} />}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-sm truncate text-subtle">{f.title}</h4>
+                    <span className="badge bg-surface-2 text-subtle border border-border-strong text-[10px] shrink-0">
+                      <Lock size={9} /> Locked
+                    </span>
+                  </div>
+                  <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span className="flex items-center gap-1"><Trophy size={10} /> Final · Level {level}</span>
+                    <span>{f.totalQuestions} questions</span>
+                    <span>
+                      {!lessonsDone ? 'unlocks when all checkpoints pass' : `unlocks after the Level ${level - 1} final`}
+                    </span>
+                  </p>
                 </div>
               </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className={`font-medium text-sm truncate transition-colors ${
-                    final.passed
-                      ? 'text-muted'
-                      : 'text-content group-hover:text-yellow-600 dark:group-hover:text-yellow-400'
+            ) : (
+              <Link
+                to={`/app/quiz/${f._id}`}
+                state={{ from: 'path', pathSlug }}
+                className={`relative flex items-center gap-4 px-2 py-3 rounded-lg transition-colors group ${
+                  fIsNext ? 'bg-yellow-500/5' : 'hover:bg-surface-2/40'
+                }`}
+              >
+                <div className="relative w-9 h-9 shrink-0">
+                  {fIsNext && (
+                    <span aria-hidden="true" className="absolute inset-0 rounded-full bg-yellow-500 animate-ping opacity-40" />
+                  )}
+                  <div className={`relative w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border z-10 ${
+                    f.passed
+                      ? 'bg-green-500/15 border-green-500/30 text-green-600 dark:text-green-400'
+                      : fIsNext
+                      ? 'bg-yellow-500 border-yellow-500 text-white animate-pulse-glow'
+                      : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400'
                   }`}>
-                    {final.title}
-                  </h4>
-                  {finalIsNext && (
-                    <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-[10px] shrink-0">Up next</span>
-                  )}
-                  {final.passed && (
-                    <span className="badge bg-green-500/15 text-green-600 dark:text-green-400 text-[10px] shrink-0">Passed</span>
-                  )}
+                    {f.passed ? <CheckCircle2 size={17} className="animate-unlock-pop" /> : <Trophy size={16} />}
+                  </div>
                 </div>
-                <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
-                  <span className="flex items-center gap-1"><Trophy size={10} /> Final Assessment</span>
-                  <span>{final.totalQuestions} questions</span>
-                  {final.rules?.timeLimit > 0 && <span>{Math.round(final.rules.timeLimit / 60)} min</span>}
-                  <span>{final.rules?.passingScore ?? 60}% to pass</span>
-                </p>
-              </div>
-            </Link>
-          )}
-        </li>
-      )}
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className={`font-medium text-sm truncate transition-colors ${
+                      f.passed
+                        ? 'text-muted'
+                        : 'text-content group-hover:text-yellow-600 dark:group-hover:text-yellow-400'
+                    }`}>
+                      {f.title}
+                    </h4>
+                    {fIsNext && (
+                      <span className="badge bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 text-[10px] shrink-0">Up next</span>
+                    )}
+                    {f.passed && (
+                      <span className="badge bg-green-500/15 text-green-600 dark:text-green-400 text-[10px] shrink-0">Passed</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-subtle mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span className="flex items-center gap-1"><Trophy size={10} /> Final · Level {level}</span>
+                    <span>{f.totalQuestions} questions</span>
+                    {f.rules?.timeLimit > 0 && <span>{Math.round(f.rules.timeLimit / 60)} min</span>}
+                    <span>{f.rules?.passingScore ?? 60}% to pass</span>
+                  </p>
+                </div>
+              </Link>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }

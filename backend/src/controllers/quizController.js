@@ -11,7 +11,7 @@ export const createQuiz = asyncHandler(async (req, res) => {
   const {
     title, description, type, mode, timeLimit, maxAttempts,
     shuffleQuestions, shuffleOptions, showExplanations, showResults,
-    passingScore, allowRetry, estimatedMinutes, difficulty,
+    passingScore, negativeMarking, allowRetry, estimatedMinutes, difficulty,
     missionId, learningPathId, questionIds,
   } = req.body;
 
@@ -30,6 +30,7 @@ export const createQuiz = asyncHandler(async (req, res) => {
       showExplanations: showExplanations !== false,
       showResults: showResults || 'immediate',
       passingScore: passingScore || 60,
+      negativeMarking: Math.min(Math.max(Number(negativeMarking) || 0, 0), 1),
       allowRetry: allowRetry !== false,
     },
     mission: missionId || null,

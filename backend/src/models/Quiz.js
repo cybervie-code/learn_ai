@@ -17,6 +17,7 @@ const quizRuleSchema = new Schema({
   showExplanations: { type: Boolean, default: true },
   showResults: { type: String, enum: ['immediate', 'after-submit', 'after-deadline', 'manual'], default: 'immediate' },
   passingScore: { type: Number, default: 60 }, // percentage
+  negativeMarking: { type: Number, default: 0, min: 0, max: 1 }, // fraction of a question's points deducted per wrong answer, 0 = off
   allowRetry: { type: Boolean, default: true },
   isProctored: { type: Boolean, default: false },
 }, { _id: false });
@@ -44,6 +45,9 @@ const quizSchema = new Schema({
   // Association
   mission: { type: Schema.Types.ObjectId, ref: 'Mission', default: null },
   learningPath: { type: Schema.Types.ObjectId, ref: 'LearningPath', default: null },
+  // For path finals (mission: null): which tier this assessment sits at —
+  // 1 = first final, 2 = unlocked only after the level-1 final is passed
+  level: { type: Number, default: 1, min: 1 },
 
   // Status
   isPublished: { type: Boolean, default: false },

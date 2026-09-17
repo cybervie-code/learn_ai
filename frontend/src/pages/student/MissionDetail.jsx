@@ -138,6 +138,9 @@ export default function MissionDetail() {
               <h2 className="text-lg font-semibold text-content">Checkpoint quiz</h2>
               <p className="text-sm text-muted mt-1">
                 {mission.quiz.totalQuestions || 'Multiple'} questions • Immediate feedback • Earn {mission.xpReward} XP
+                {(mission.quiz.rules?.negativeMarking || 0) > 0 && (
+                  <span className="text-amber-600/90 dark:text-amber-400/90"> • −{Math.round(mission.quiz.rules.negativeMarking * 100)}% per wrong · skip = 0</span>
+                )}
               </p>
             </div>
             <button onClick={startQuiz} className="btn-primary shrink-0 w-full sm:w-auto justify-center">

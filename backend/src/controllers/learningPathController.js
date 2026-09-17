@@ -8,28 +8,39 @@ import { ApiError } from '../utils/ApiError.js';
 import { missionLock } from '../utils/sequenceGate.js';
 
 const FINAL_SELECT =
-  'title slug description type totalQuestions totalPoints estimatedMinutes difficulty learningPath rules';
+  'title slug description type level totalQuestions totalPoints estimatedMinutes difficulty learningPath rules';
 
-// A path's final assessment is the published quiz linked to the path with no
-// mission — checkpoints always have a mission, so mission:null is the spine.
-// If several exist, prefer the one explicitly typed 'assessment'.
+// A path's final assessments are the published quizzes linked to the path
+// with no mission — checkpoints always have a mission, so mission:null is
+// the spine. A path can have several tiered finals (level 1, 2, ...),
+// returned in level order.
 async function findFinalAssessments(pathIds) {
   const finals = await Quiz.find({
     learningPath: { $in: pathIds },
     mission: null,
     status: 'published',
     isPublished: true,
-  }).select(FINAL_SELECT).lean();
+  }).select(FINAL_SELECT).sort({ level: 1, createdAt: 1 }).lean();
 
   const byPath = new Map();
   for (const f of finals) {
     const key = String(f.learningPath);
-    const cur = byPath.get(key);
-    if (!cur || (f.type === 'assessment' && cur.type !== 'assessment')) {
-      byPath.set(key, f);
-    }
+    if (!byPath.has(key)) byPath.set(key, []);
+    byPath.get(key).push(f);
   }
   return byPath;
+}
+
+// Attach passed/locked flags to a path's ordered finals. `checkpointsGated`
+// is true while any lesson checkpoint is unpassed; a final is additionally
+// locked while an earlier-level final is unpassed.
+function annotateFinals(finals, passedQuizIds, checkpointsGated) {
+  let gated = checkpointsGated;
+  return finals.map((f) => {
+    const out = { ...f, passed: passedQuizIds.has(String(f._id)), locked: gated };
+    if (!out.passed) gated = true;
+    return out;
+  });
 }
 
 // List published learning paths
@@ -59,7 +70,7 @@ export const listPaths = asyncHandler(async (req, res) => {
   const finalByPath = await findFinalAssessments(paths.map((p) => p._id));
   const quizIds = [
     ...paths.flatMap((p) => p.missions.map((m) => m.mission?.quiz)).filter(Boolean),
-    ...[...finalByPath.values()].map((f) => f._id),
+    ...[...finalByPath.values()].flat().map((f) => f._id),
   ];
   const passedQuizIds = req.user
     ? new Set(
@@ -91,10 +102,14 @@ export const listPaths = asyncHandler(async (req, res) => {
       totalMissions: path.missions.length,
       completedMissions: done,
     };
-    const final = finalByPath.get(String(path._id));
-    path.finalAssessment = final
-      ? { ...final, passed: passedQuizIds.has(String(final._id)), locked: gated }
-      : null;
+    const finals = annotateFinals(
+      finalByPath.get(String(path._id)) || [],
+      passedQuizIds,
+      gated
+    );
+    path.finalAssessments = finals;
+    // First final kept under the legacy singular key for older payloads
+    path.finalAssessment = finals[0] || null;
   }
 
   sendSuccess(res, paths, 'Learning paths fetched');
@@ -116,11 +131,11 @@ export const getPath = asyncHandler(async (req, res) => {
   // the final assessment follows the same rule
   const obj = path.toObject();
   const finalByPath = await findFinalAssessments([obj._id]);
-  const final = finalByPath.get(String(obj._id)) || null;
+  const finals = finalByPath.get(String(obj._id)) || [];
 
   const quizIds = [
     ...obj.missions.map((m) => m.mission?.quiz).filter(Boolean),
-    ...(final ? [final._id] : []),
+    ...finals.map((f) => f._id),
   ];
   const passed = req.user
     ? new Set(
@@ -144,9 +159,8 @@ export const getPath = asyncHandler(async (req, res) => {
       m.locked = gated;
       if (m.mission?.quiz && !m.completed) gated = true;
     });
-  obj.finalAssessment = final
-    ? { ...final, passed: passed.has(String(final._id)), locked: gated }
-    : null;
+  obj.finalAssessments = annotateFinals(finals, passed, gated);
+  obj.finalAssessment = obj.finalAssessments[0] || null;
 
   sendSuccess(res, obj, 'Learning path fetched');
 });

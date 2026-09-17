@@ -42,7 +42,8 @@ export async function missionLock(mission, userId) {
 }
 
 // Is a quiz locked? Checkpoints are gated by earlier missions; a path final
-// (learningPath set, mission null) is gated by every mission in the path.
+// (learningPath set, mission null) is gated by every mission in the path —
+// and a level-N final additionally needs every lower-level final passed.
 export async function quizLock(quiz, userId) {
   let pathId = quiz.learningPath;
   let beforeOrder = Infinity;
@@ -54,7 +55,29 @@ export async function quizLock(quiz, userId) {
   }
   if (!pathId) return { locked: false, reason: null };
   const unpassed = await unpassedGates(await gateQuizzes(pathId, beforeOrder), userId);
-  if (!unpassed.length) return { locked: false, reason: null };
+  if (!unpassed.length) {
+    // Tiered finals: checkpoints alone don't unlock a level-2+ final —
+    // every published lower-level final on the path must be passed first.
+    if (!quiz.mission && (quiz.level ?? 1) > 1) {
+      // A missing level field means level 1 (finals predating the field)
+      const earlierFinals = await Quiz.find({
+        learningPath: pathId,
+        mission: null,
+        status: 'published',
+        isPublished: true,
+        _id: { $ne: quiz._id },
+        $or: [{ level: { $lt: quiz.level } }, { level: { $exists: false } }],
+      }).select('_id title level').lean();
+      const unpassedFinals = await unpassedGates(earlierFinals, userId);
+      if (unpassedFinals.length) {
+        return {
+          locked: true,
+          reason: 'Pass the previous level final assessment to unlock this one.',
+        };
+      }
+    }
+    return { locked: false, reason: null };
+  }
   return {
     locked: true,
     reason: quiz.mission

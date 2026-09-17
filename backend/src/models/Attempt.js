@@ -8,6 +8,11 @@ const questionSnapshotSchema = new Schema({
   questionVersion: { type: Number, required: true },
   questionText: { type: String, required: true },
   questionType: { type: String, required: true },
+  scenario: { type: String, default: '' },
+  // How many options the student must pick — equals the count of correct
+  // keys at snapshot time (safe to show: "Select TWO" is printed on the
+  // question itself anyway)
+  selectionCount: { type: Number, default: 1 },
   options: [{
     key: String,
     text: String,
@@ -56,6 +61,9 @@ const attemptSchema = new Schema({
   correctCount: { type: Number, default: 0 },
   incorrectCount: { type: Number, default: 0 },
   skippedCount: { type: Number, default: 0 },
+  // Frozen copy of quiz.rules.negativeMarking taken at attempt start, so an
+  // in-progress attempt always scores under the rules it began with
+  negativeMarking: { type: Number, default: 0 },
 
   // State machine
   status: {

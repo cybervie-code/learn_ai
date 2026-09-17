@@ -7,6 +7,9 @@ import {
   Trophy, Zap, AlertCircle, Loader2,
 } from 'lucide-react';
 
+// Trim point values for display: 10 -> "10", 2.5 -> "2.5"
+const fmtPts = (n) => String(Number((n ?? 0).toFixed(2)));
+
 export default function QuizPlayer() {
   const { quizId } = useParams();
   const navigate = useNavigate();
@@ -63,6 +66,9 @@ export default function QuizPlayer() {
 
   const currentQuestion = attempt?.questionSnapshots?.[currentIndex];
   const totalQuestions = attempt?.questionSnapshots?.length || 0;
+  // "Select TWO"-style questions: all correct options required for the marks
+  const isMulti = currentQuestion?.questionType === 'multiple-select';
+  const requiredPicks = isMulti ? (currentQuestion?.selectionCount || 2) : 1;
 
   const handleSelect = (key) => {
     if (feedback) return; // locked after submit
@@ -74,6 +80,10 @@ export default function QuizPlayer() {
   const handleSubmitAnswer = async () => {
     if (selectedKeys.length === 0) {
       toast.error('Please select an answer');
+      return;
+    }
+    if (isMulti && selectedKeys.length !== requiredPicks) {
+      toast.error(`Select exactly ${requiredPicks} answers`);
       return;
     }
     setSubmitting(true);
@@ -140,6 +150,8 @@ export default function QuizPlayer() {
   if (phase === 'results') {
     const { percentage, correctCount, incorrectCount, skippedCount, earnedPoints, totalPoints, xpAwarded } = attempt;
     const passed = percentage >= 60;
+    // Wrong answers store their deduction in pointsAwarded — sum it up for the breakdown
+    const penaltyPts = -(attempt.responses || []).reduce((s, r) => s + Math.min(0, r.pointsAwarded || 0), 0);
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -152,6 +164,11 @@ export default function QuizPlayer() {
 
           <div className="text-5xl font-bold text-content mb-2">{percentage}%</div>
           <p className="text-sm text-subtle">{earnedPoints} / {totalPoints} points</p>
+          {penaltyPts > 0 && (
+            <p className="text-xs text-subtle mt-1">
+              Negative marking: −{fmtPts(penaltyPts)} pts for {incorrectCount} incorrect · skipped answers scored 0
+            </p>
+          )}
 
           {xpAwarded > 0 && (
             <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 text-sm font-medium mt-4">
@@ -249,16 +266,28 @@ export default function QuizPlayer() {
             style={{ width: `${((currentIndex + (feedback ? 1 : 0)) / totalQuestions) * 100}%` }}
           />
         </div>
+        {(attempt.negativeMarking || 0) > 0 && (
+          <p className="flex items-center gap-1.5 mt-2 text-[11px] text-subtle">
+            <AlertCircle size={12} className="text-amber-500 shrink-0" />
+            Negative marking on — +{fmtPts(currentQuestion?.points)} correct · −{fmtPts((currentQuestion?.points || 0) * attempt.negativeMarking)} wrong · 0 skipped
+          </p>
+        )}
       </div>
 
       {/* Question */}
       <div className="card p-6">
         {currentQuestion?.scenario && (
-          <div className="p-4 rounded-lg bg-surface-2/50 border border-border-strong mb-4 text-sm text-muted">
+          <div className="p-4 rounded-lg bg-surface-2/50 border border-border-strong mb-4 text-sm text-muted whitespace-pre-line">
             {currentQuestion.scenario}
           </div>
         )}
         <h2 className="text-lg font-semibold text-content mb-6">{currentQuestion?.questionText}</h2>
+
+        {isMulti && (
+          <p className="flex items-center gap-1.5 -mt-4 mb-4 text-xs font-medium text-brand-600 dark:text-brand-400">
+            <CheckCircle2 size={13} /> Select {requiredPicks} answers — all correct choices required for marks
+          </p>
+        )}
 
         <div className="space-y-3">
           {currentQuestion?.optionOrder?.map((key) => {
@@ -284,7 +313,7 @@ export default function QuizPlayer() {
                     : 'border-border-strong hover:border-border-strong hover:bg-surface-2/50'
                 }`}
               >
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium shrink-0 ${
+                <span className={`w-7 h-7 ${isMulti ? 'rounded-md' : 'rounded-full'} flex items-center justify-center text-sm font-medium shrink-0 ${
                   feedback
                     ? option.isCorrect
                       ? 'bg-green-500 text-white'
