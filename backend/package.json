@@ -10,6 +10,8 @@
     "seed": "node seed/seed.js",
     "seed:pentest": "node seed/pentest-learning-path.js",
     "seed:pentest-l2": "node seed/pentest-level2-final.js",
+    "seed:pentest-l3-6": "node seed/pentest-finals-levels-3-6.js",
+    "seed:python-path": "node seed/python-mastery-path.js",
     "seed:ai-path": "node seed/ai-ready-student-path.js"
   },
   "dependencies": {

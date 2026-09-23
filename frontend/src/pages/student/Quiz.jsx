@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import {
-  Brain, ArrowRight, Clock, CheckCircle2,
-  RotateCcw, Trophy, Zap, Play, Layers, Lock,
+  Brain, ArrowRight, ArrowLeft, Clock, CheckCircle2,
+  RotateCcw, Trophy, Zap, Play, Layers, Lock, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -26,11 +26,41 @@ const enterStyle = (i) => ({
   animationFillMode: 'backwards',
 });
 
+// Per-path accent themes for the overview cards — the brand/cyber palette
+// for AI, a red-hot security tone for pentest, Python-green for Python.
+// Unknown paths fall back to the same set, rotated by index.
+const PATH_ACCENTS = {
+  'ai-mastery': {
+    strip: 'from-brand-600 via-cyber-500 to-brand-600',
+    tile: 'from-brand-500/15 to-cyber-500/10 border-brand-500/25',
+    bar: 'bg-brand-600',
+    text: 'text-brand-600 dark:text-brand-400',
+    soft: 'bg-brand-500/[0.07] border-brand-500/15',
+  },
+  'vulnerability-penetration-testing': {
+    strip: 'from-red-500 via-amber-500 to-red-500',
+    tile: 'from-red-500/15 to-amber-500/10 border-red-500/25',
+    bar: 'bg-red-500',
+    text: 'text-red-500 dark:text-red-400',
+    soft: 'bg-red-500/[0.06] border-red-500/15',
+  },
+  'python-mastery': {
+    strip: 'from-emerald-500 via-teal-400 to-emerald-500',
+    tile: 'from-emerald-500/15 to-teal-500/10 border-emerald-500/25',
+    bar: 'bg-emerald-500',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    soft: 'bg-emerald-500/[0.07] border-emerald-500/15',
+  },
+};
+const accentFor = (key, i) => PATH_ACCENTS[key] || Object.values(PATH_ACCENTS)[i % 3];
+
 export default function Quiz() {
+  const { slug } = useParams();
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [attemptsByQuiz, setAttemptsByQuiz] = useState({});
   const [inProgress, setInProgress] = useState([]);
+  const [pathInfo, setPathInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -60,6 +90,14 @@ export default function Quiz() {
       setLoading(false);
     });
   }, []);
+
+  // Detail view: pull the path's own metadata (description, difficulty)
+  // for the header — the quiz list only carries title/slug/icon.
+  useEffect(() => {
+    setPathInfo(null);
+    if (!slug) return;
+    api.getPath(slug).then((res) => setPathInfo(res.data.data)).catch(() => {});
+  }, [slug]);
 
   // Hide resume rows whose quiz is gone (deleted/retired/unpublished)
   const resumable = useMemo(() => {
@@ -125,8 +163,38 @@ export default function Quiz() {
 
   if (loading) return <div className="text-subtle p-8">Loading...</div>;
 
-  const openQuiz = (q) => navigate(`/app/quiz/${q._id}`, { state: { from: 'quiz' } });
+  const openQuiz = (q, pathSlug) => navigate(`/app/quiz/${q._id}`, {
+    state: pathSlug ? { from: 'quizpath', pathSlug } : { from: 'quiz' },
+  });
 
+  /* ================= Path detail view ================= */
+  if (slug) {
+    const g = pathGroups.find((x) => (x.slug || x.key) === slug);
+    if (!g) {
+      return (
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Link to="/app/quiz" className="text-sm text-muted hover:text-content flex items-center gap-1 w-fit">
+            <ArrowLeft size={14} /> Back to Quiz Arena
+          </Link>
+          <div className="card p-12 text-center">
+            <Brain size={32} className="mx-auto text-subtle mb-3" />
+            <p className="text-subtle">This course has no published quizzes.</p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <PathDetail
+        group={g}
+        pathInfo={pathInfo}
+        attemptsByQuiz={attemptsByQuiz}
+        resumable={resumable}
+        onOpenQuiz={(q) => openQuiz(q, g.slug)}
+      />
+    );
+  }
+
+  /* ================= Arena overview ================= */
   const statItems = [
     { icon: Layers, label: 'assessments', value: stats.total, color: 'text-brand-600 dark:text-brand-400' },
     { icon: Trophy, label: 'passed', value: stats.passed, color: 'text-green-600 dark:text-green-400' },
@@ -141,7 +209,7 @@ export default function Quiz() {
         <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-brand-600 dark:text-brand-400 mb-1">Quiz Arena</div>
         <h1 className="text-2xl font-bold text-content">Assessments</h1>
         <p className="text-muted mt-1 text-sm">
-          Score {PASS_MARK}%+ to clear each assessment — your best run feeds XP and leaderboard rank.
+          Pick a course, clear its checkpoints, then take the final — score {PASS_MARK}%+ to pass.
         </p>
       </div>
 
@@ -156,118 +224,19 @@ export default function Quiz() {
       </div>
 
       {/* Resume in-progress attempts */}
-      {resumable.length > 0 && (
-        <section className="card overflow-hidden animate-fade-in">
-          <div className="px-5 py-3 border-b border-border flex items-center gap-2.5">
-            <span className="relative flex w-2 h-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-brand-500 opacity-60 animate-ping" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500" />
-            </span>
-            <h2 className="font-semibold text-content text-xs uppercase tracking-[0.15em]">Resume where you left off</h2>
-            <span className="ml-auto text-[11px] text-subtle">{resumable.length} in progress</span>
-          </div>
-          <ul className="divide-y divide-border">
-            {resumable.map((a) => {
-              const total = a.totalQuestions || 0;
-              const answered = a.answeredCount || 0;
-              const pct = total ? Math.round((answered / total) * 100) : 0;
-              return (
-                <li key={a._id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
-                  <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center shrink-0">
-                    <Clock size={14} className="text-brand-600 dark:text-brand-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-content truncate">{a.quizTitle || 'Quiz'}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="h-1 w-24 bg-surface-2 rounded-full overflow-hidden">
-                        <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-[11px] text-subtle">{answered}/{total}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigate(`/app/quiz/${a.quiz}`, { state: { from: 'quiz' } })}
-                    className="btn-primary text-xs px-4 py-2 shrink-0"
-                  >
-                    Resume <ArrowRight size={13} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      <ResumeStrip items={resumable} />
 
-      {/* Course sections — the assessment view of each learning path */}
-      {pathGroups.map((g) => {
-        const allCleared = g.quizzes.length > 0 && g.passedCount === g.quizzes.length;
-        const pct = g.quizzes.length ? Math.round((g.passedCount / g.quizzes.length) * 100) : 0;
-        return (
-          <section key={g.key} className="animate-fade-in">
-            <div className="flex items-center justify-between gap-3 mb-3 px-0.5">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-surface-2 border border-border flex items-center justify-center text-lg shrink-0">
-                  {g.icon || '📚'}
-                </div>
-                <h2 className="font-semibold text-content truncate">{g.title}</h2>
-                {allCleared && (
-                  <span className="badge bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 text-[10px] shrink-0">
-                    <CheckCircle2 size={10} /> Cleared
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="hidden sm:flex items-center gap-2">
-                  <div className="h-1 w-16 bg-surface-2 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${allCleared ? 'bg-green-500' : 'bg-brand-600'}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] text-subtle whitespace-nowrap">{g.passedCount}/{g.quizzes.length}</span>
-                </div>
-                {g.slug && (
-                  <Link to={`/app/learn/${g.slug}`} className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap">
-                    View course →
-                  </Link>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {g.quizzes.map((q, i) => {
-                const locked = g.lockedIds.has(String(q._id));
-                const prev = i > 0 ? g.quizzes[i - 1] : null;
-                const prevTitle = prev ? stripCheckpointSuffix(prev.title) : null;
-                return !q.mission ? (
-                  <FinalBanner
-                    key={q._id}
-                    quiz={q}
-                    index={i}
-                    stat={attemptsByQuiz[String(q._id)]}
-                    upNext={q._id === g.upNextId}
-                    locked={locked}
-                    remaining={g.checkpointsLeft}
-                    onOpen={() => openQuiz(q)}
-                  />
-                ) : (
-                  <AssessmentCard
-                    key={q._id}
-                    quiz={q}
-                    index={i}
-                    fallbackIndex={i}
-                    stat={attemptsByQuiz[String(q._id)]}
-                    upNext={q._id === g.upNextId}
-                    locked={locked}
-                    prevTitle={prevTitle}
-                    onOpen={() => openQuiz(q)}
-                  />
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+      {/* Course cards — one per learning path, drills into its quizzes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {pathGroups.map((g, i) => (
+          <PathCard
+            key={g.key}
+            group={g}
+            index={i}
+            onOpen={() => navigate(`/app/quiz/path/${g.slug || g.key}`)}
+          />
+        ))}
+      </div>
 
       {pathGroups.length === 0 && (
         <div className="card p-12 text-center">
@@ -276,15 +245,250 @@ export default function Quiz() {
         </div>
       )}
 
-      {/* Wayfinding */}
-      <div className="card p-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-medium text-content text-sm">Haven't learned this yet?</p>
-          <p className="text-xs text-subtle mt-0.5">Follow a guided course — lessons first, checkpoint quizzes after.</p>
+    </div>
+  );
+}
+
+/* ============ Detail view: one course's quizzes ============ */
+function PathDetail({ group: g, pathInfo, attemptsByQuiz, resumable, onOpenQuiz }) {
+  const total = g.quizzes.length;
+  const allCleared = total > 0 && g.passedCount === total;
+  const pct = total ? Math.round((g.passedCount / total) * 100) : 0;
+  const checkpoints = g.quizzes.filter((q) => q.mission).length;
+  const finals = total - checkpoints;
+  const myResumable = resumable.filter((a) => g.quizzes.some((q) => String(q._id) === String(a.quiz)));
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      <Link to="/app/quiz" className="text-sm text-muted hover:text-content flex items-center gap-1 w-fit">
+        <ArrowLeft size={14} /> Back to Quiz Arena
+      </Link>
+
+      {/* Path header */}
+      <div className="card overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-brand-600 via-cyber-500 to-brand-600" />
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-surface-2 border border-border flex items-center justify-center text-2xl sm:text-3xl shrink-0">
+              {g.icon || '📚'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold text-content">{g.title}</h1>
+                {allCleared && (
+                  <span className="badge bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 text-[10px] shrink-0">
+                    <CheckCircle2 size={10} /> Cleared
+                  </span>
+                )}
+              </div>
+              <p className="text-muted text-sm mt-1">
+                {pathInfo?.description || 'Clear every checkpoint to unlock the final assessment.'}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-xs text-subtle">
+                <span>{checkpoints} checkpoints</span>
+                <span>{finals} final{finals === 1 ? '' : 's'}</span>
+                <span>{g.passedCount}/{total} cleared</span>
+                {pathInfo?.difficulty && <span className={DIFF_TEXT[pathInfo.difficulty] || 'text-subtle'}>{pathInfo.difficulty}</span>}
+              </div>
+            </div>
+          </div>
+          {total > 0 && (
+            <div className="mt-5">
+              <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${allCleared ? 'bg-green-500' : 'bg-gradient-to-r from-brand-600 to-cyber-500'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
-        <Link to="/app/learn" className="btn-secondary text-sm">
-          Go to Learn <ArrowRight size={14} />
-        </Link>
+      </div>
+
+      {/* Resume rows for this course only */}
+      <ResumeStrip items={myResumable} pathSlug={g.slug} />
+
+      {/* Quiz grid — checkpoints then finals, with sequential gating */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {g.quizzes.map((q, i) => {
+          const locked = g.lockedIds.has(String(q._id));
+          const prev = i > 0 ? g.quizzes[i - 1] : null;
+          const prevTitle = prev ? stripCheckpointSuffix(prev.title) : null;
+          const isFinal = !q.mission;
+          return isFinal ? (
+            <FinalBanner
+              key={q._id}
+              quiz={q}
+              index={i}
+              stat={attemptsByQuiz[String(q._id)]}
+              upNext={q._id === g.upNextId}
+              locked={locked}
+              remaining={g.checkpointsLeft}
+              onOpen={() => onOpenQuiz(q)}
+            />
+          ) : (
+            <AssessmentCard
+              key={q._id}
+              quiz={q}
+              index={i}
+              fallbackIndex={i}
+              stat={attemptsByQuiz[String(q._id)]}
+              upNext={q._id === g.upNextId}
+              locked={locked}
+              prevTitle={prevTitle}
+              onOpen={() => onOpenQuiz(q)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============ Shared building blocks ============ */
+
+/* Resume rows — collapsed by default, expands on tap. Used on the
+   overview (all attempts) and per-course view. */
+function ResumeStrip({ items, pathSlug }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  if (!items.length) return null;
+  return (
+    <section className="card overflow-hidden animate-fade-in">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-3 flex items-center gap-2.5 text-left hover:bg-surface-2/40 transition-colors"
+      >
+        <span className="relative flex w-2 h-2 shrink-0">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-brand-500 opacity-60 animate-ping" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500" />
+        </span>
+        <h2 className="font-semibold text-content text-xs uppercase tracking-[0.15em]">Resume where you left off</h2>
+        <span className="badge bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/25 text-[10px] ml-auto">
+          {items.length} in progress
+        </span>
+        <ChevronDown size={15} className={`text-subtle transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+      <ul className="divide-y divide-border border-t border-border">
+        {items.map((a) => {
+          const total = a.totalQuestions || 0;
+          const answered = a.answeredCount || 0;
+          const pct = total ? Math.round((answered / total) * 100) : 0;
+          return (
+            <li key={a._id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+              <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center shrink-0">
+                <Clock size={14} className="text-brand-600 dark:text-brand-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm text-content truncate">{a.quizTitle || 'Quiz'}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="h-1 w-24 bg-surface-2 rounded-full overflow-hidden">
+                    <div className="h-full bg-brand-600 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[11px] text-subtle">{answered}/{total}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate(`/app/quiz/${a.quiz}`, { state: pathSlug ? { from: 'quizpath', pathSlug } : { from: 'quiz' } })}
+                className="btn-primary text-xs px-4 py-2 shrink-0"
+              >
+                Resume <ArrowRight size={13} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      )}
+    </section>
+  );
+}
+
+/* Overview card for one learning path — drills into its quiz list. */
+function PathCard({ group: g, index = 0, onOpen }) {
+  const total = g.quizzes.length;
+  const allCleared = total > 0 && g.passedCount === total;
+  const pct = total ? Math.round((g.passedCount / total) * 100) : 0;
+  const checkpoints = g.quizzes.filter((q) => q.mission).length;
+  const finals = total - checkpoints;
+  const nextQ = g.upNextId ? g.quizzes.find((q) => String(q._id) === String(g.upNextId)) : null;
+  const accent = accentFor(g.slug || g.key, index);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      className="card relative overflow-hidden cursor-pointer group transition-all duration-200 hover:-translate-y-1 hover:shadow-xl animate-slide-up"
+      style={enterStyle(index)}
+    >
+      {/* Accent strip */}
+      <div className={`h-1.5 bg-gradient-to-r ${allCleared ? 'from-green-500 via-emerald-400 to-green-500' : accent.strip}`} />
+
+      <div className="p-5 flex flex-col flex-1 h-full">
+        <div className="flex items-start justify-between gap-2">
+          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br border flex items-center justify-center text-2xl shrink-0 ${allCleared ? 'from-green-500/15 to-emerald-500/10 border-green-500/25' : accent.tile}`}>
+            {g.icon || '📚'}
+          </div>
+          {allCleared ? (
+            <span className="badge bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 text-[10px] shrink-0">
+              <CheckCircle2 size={10} /> Cleared
+            </span>
+          ) : g.passedCount > 0 ? (
+            <span className={`badge border text-[10px] shrink-0 ${accent.soft} ${accent.text}`}>
+              In progress
+            </span>
+          ) : (
+            <span className="badge bg-surface-2 text-subtle border border-border text-[10px] shrink-0">
+              Not started
+            </span>
+          )}
+        </div>
+
+        <h3 className="mt-4 font-semibold text-content leading-snug line-clamp-2 min-h-[2.5rem] group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+          {g.title}
+        </h3>
+        <p className="text-xs text-subtle mt-1">
+          {checkpoints} checkpoint{checkpoints === 1 ? '' : 's'} · {finals} final{finals === 1 ? '' : 's'}
+        </p>
+
+        {/* Progress */}
+        <div className="mt-4 flex items-center gap-3">
+          <div className="h-1.5 flex-1 bg-surface-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${allCleared ? 'bg-green-500' : accent.bar}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className={`text-xs font-bold shrink-0 ${allCleared ? 'text-green-600 dark:text-green-400' : accent.text}`}>
+            {pct}%
+          </span>
+        </div>
+
+        {/* Up next / state footer */}
+        <div className="mt-auto pt-4">
+          <div className={`rounded-lg border px-3 py-2.5 flex items-center gap-2 text-xs ${
+            allCleared
+              ? 'bg-green-500/[0.07] border-green-500/15 text-green-700 dark:text-green-300'
+              : `${accent.soft} text-content`
+          }`}>
+            {allCleared ? (
+              <CheckCircle2 size={13} className="text-green-600 dark:text-green-400 shrink-0" />
+            ) : (
+              <Play size={12} className={`${accent.text} shrink-0`} />
+            )}
+            <span className="font-medium truncate flex-1">
+              {allCleared
+                ? 'Course cleared — retake any quiz'
+                : nextQ
+                ? `Up next: ${stripCheckpointSuffix(nextQ.title)}`
+                : 'Start the first checkpoint'}
+            </span>
+            <ArrowRight size={13} className={`${allCleared ? 'text-green-600 dark:text-green-400' : accent.text} group-hover:translate-x-0.5 transition-transform shrink-0`} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -299,6 +503,7 @@ function AssessmentCard({ quiz: q, fallbackIndex, index = 0, stat, upNext, locke
   const lessonNo = q.mission?.order ?? fallbackIndex + 1;
   const title = stripCheckpointSuffix(q.title);
   const gate = prevTitle || 'the previous checkpoint';
+  const subtitle = `Lesson ${lessonNo} checkpoint`;
 
   const poke = () => {
     setShaking(true);
@@ -329,7 +534,7 @@ function AssessmentCard({ quiz: q, fallbackIndex, index = 0, stat, upNext, locke
             </span>
           </div>
           <h3 className="mt-3 font-semibold text-sm leading-snug line-clamp-2 min-h-[2.5rem] text-content">{title}</h3>
-          <p className="text-xs text-subtle mt-0.5 pb-1">Lesson {lessonNo} checkpoint</p>
+          <p className="text-xs text-subtle mt-0.5 pb-1">{subtitle}</p>
           <div className="mt-auto">
             <div className="mt-3 pt-3 border-t border-dashed border-brand-500/20 flex items-center justify-between gap-2 text-[11px]">
               <span className="flex items-center gap-1.5 text-brand-600/80 dark:text-brand-400/80 min-w-0">
@@ -392,7 +597,7 @@ function AssessmentCard({ quiz: q, fallbackIndex, index = 0, stat, upNext, locke
         }`}>
           {title}
         </h3>
-        <p className="text-xs text-subtle mt-0.5 pb-1">Lesson {lessonNo} checkpoint</p>
+        <p className="text-xs text-subtle mt-0.5 pb-1">{subtitle}</p>
 
         <div className="mt-auto">
           <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2 text-xs">

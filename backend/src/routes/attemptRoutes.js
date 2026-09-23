@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  startAttempt, submitAnswer, submitAttempt, getAttemptResults, getMyAttempts,
+  startAttempt, submitAnswer, submitAttempt, flagAttempt, getAttemptResults, getMyAttempts,
 } from '../controllers/attemptController.js';
 import { authenticate } from '../middleware/auth.js';
 import { authorize } from '../middleware/roles.js';
@@ -14,6 +14,7 @@ router.use(authenticate);
 router.post('/start', authorize('student'), asyncHandler(startAttempt));
 router.post('/:attemptId/answer', authorize('student'), asyncHandler(submitAnswer));
 router.post('/:attemptId/submit', authorize('student'), asyncHandler(submitAttempt));
+router.post('/:attemptId/flag', authorize('student'), asyncHandler(flagAttempt));
 router.get('/me', authorize('student'), asyncHandler(getMyAttempts));
 router.get('/:id/results', authorize('student'), asyncHandler(getAttemptResults));
 

@@ -48,6 +48,17 @@ function sanitizeAttempt(attempt, quiz = null) {
       })),
     };
   });
+  // Responses carry isCorrect/pointsAwarded — the same secret as correctKeys.
+  // Strip them while an attempt is in progress unless the quiz reveals
+  // per-answer feedback (learning mode / immediate results), otherwise the
+  // response payload itself becomes a brute-force oracle. Finalised attempts
+  // keep them so the student can see their own right/wrong marks.
+  const showResponseTruth = finalised || revealAnswered;
+  obj.responses = (obj.responses || []).map((r) => ({
+    ...r,
+    isCorrect: showResponseTruth ? r.isCorrect : undefined,
+    pointsAwarded: showResponseTruth ? r.pointsAwarded : undefined,
+  }));
   return obj;
 }
 
@@ -264,9 +275,10 @@ export const submitAnswer = asyncHandler(async (req, res) => {
   const quiz = await Quiz.findById(attempt.quiz);
   const showFeedback = quiz.rules.mode === 'learning' || quiz.rules.showResults === 'immediate';
 
-  // Always report right/wrong for the submitted pick — that's the student's
-  // own answer. correctKeys/explanation stay gated so assessment retakes
-  // don't get the key for free.
+  // Learning/immediate-feedback quizzes report right/wrong per pick.
+  // Assessment quizzes get only a receipt: returning isCorrect here would
+  // let a student brute-force every option by re-submitting via the API
+  // (re-answers are allowed server-side until the attempt is submitted).
   const feedback = showFeedback
     ? {
         isCorrect,
@@ -274,7 +286,7 @@ export const submitAnswer = asyncHandler(async (req, res) => {
         explanation: quiz.rules.mode === 'learning' ? (snapshot.explanation || snapshot.options.find((o) => correctKeys.includes(o.key))?.explanation) : undefined,
         pointsAwarded,
       }
-    : { isCorrect, pointsAwarded };
+    : { recorded: true };
 
   sendSuccess(res, { attempt: sanitizeAttempt(attempt, quiz), feedback }, 'Answer submitted');
 });
@@ -362,6 +374,22 @@ export const submitAttempt = asyncHandler(async (req, res) => {
     }
   }
 
+  // Integrity: a median answer time under ~5s across a real attempt is a
+  // signature of pre-leaked answers or automation — flag it for review.
+  const answeredTimes = attempt.responses
+    .map((r) => r.timeSpent || 0)
+    .filter((t) => t > 0)
+    .sort((a, b) => a - b);
+  if (answeredTimes.length >= 5) {
+    const medianTime = answeredTimes[Math.floor(answeredTimes.length / 2)];
+    if (medianTime < 5) {
+      attempt.integrityFlags.push({
+        type: 'rapid-submit',
+        detail: `Median ${medianTime}s/question across ${answeredTimes.length} answered`,
+      });
+    }
+  }
+
   // Completing a quiz counts as daily activity
   await updateStreak(req.user._id);
 
@@ -393,6 +421,32 @@ export const submitAttempt = asyncHandler(async (req, res) => {
   });
 
   sendSuccess(res, sanitizeAttempt(attempt, quiz), 'Attempt submitted and scored');
+});
+
+/**
+ * Record an integrity flag against an in-progress attempt.
+ * Emitted by the quiz player on tab switches, copy attempts, fullscreen
+ * exits etc. Flags are for faculty review — they never block the student.
+ */
+const FLAG_TYPES = ['tab-switch', 'copy-paste', 'rapid-submit', 'duplicate-account', 'suspicious-pattern', 'other'];
+const MAX_FLAGS_PER_ATTEMPT = 50;
+
+export const flagAttempt = asyncHandler(async (req, res) => {
+  const { attemptId } = req.params;
+  const { type, detail } = req.body;
+
+  const attempt = await Attempt.findById(attemptId);
+  if (!attempt) throw ApiError.notFound('Attempt not found');
+  if (String(attempt.user) !== String(req.user._id)) throw ApiError.forbidden('Not your attempt');
+  if (attempt.status !== 'in-progress') throw ApiError.badRequest('Attempt is not in progress');
+  if (!FLAG_TYPES.includes(type)) throw ApiError.badRequest('Invalid flag type');
+
+  if (attempt.integrityFlags.length < MAX_FLAGS_PER_ATTEMPT) {
+    attempt.integrityFlags.push({ type, detail: String(detail || '').slice(0, 500) });
+    await attempt.save();
+  }
+
+  sendSuccess(res, { flagCount: attempt.integrityFlags.length }, 'Flag recorded');
 });
 
 /**

@@ -95,6 +95,7 @@ export default function App() {
             <Route path="learn" element={<Learn />} />
             <Route path="learn/:slug" element={<Learn />} />
             <Route path="learn/mission/:slug" element={<MissionDetail />} />
+            <Route path="quiz/path/:slug" element={<StudentRoute><Quiz /></StudentRoute>} />
             <Route path="quiz/:quizId" element={<StudentRoute><QuizPlayer /></StudentRoute>} />
             <Route path="quiz" element={<StudentRoute><Quiz /></StudentRoute>} />
             <Route path="practice" element={<Navigate to="/app/quiz" replace />} />

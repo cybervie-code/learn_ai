@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../api/client.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import toast from 'react-hot-toast';
 import {
   Clock, CheckCircle2, XCircle, ArrowRight, ArrowLeft, RotateCcw,
@@ -10,7 +11,23 @@ import {
 // Trim point values for display: 10 -> "10", 2.5 -> "2.5"
 const fmtPts = (n) => String(Number((n ?? 0).toFixed(2)));
 
+// Faint identity watermark tiled over assessment screens — a screenshot of
+// the paper is then attributable to the student who captured it.
+function Watermark({ user }) {
+  const text = `${user?.name || 'Student'} · ${user?.email || ''}`;
+  return (
+    <div aria-hidden="true" className="fixed inset-0 z-40 pointer-events-none select-none overflow-hidden">
+      <div className="absolute -inset-1/2 grid grid-cols-3 place-items-center rotate-[-24deg] opacity-[0.07]">
+        {Array.from({ length: 27 }, (_, i) => (
+          <span key={i} className="whitespace-nowrap text-sm font-medium text-content">{text}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function QuizPlayer() {
+  const { user } = useAuth();
   const { quizId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,6 +48,8 @@ export default function QuizPlayer() {
     ? { to: `/app/learn/mission/${origin.missionSlug}`, label: 'Back to lesson' }
     : origin.from === 'path' && origin.pathSlug
     ? { to: `/app/learn/${origin.pathSlug}`, label: 'Back to course' }
+    : origin.from === 'quizpath' && origin.pathSlug
+    ? { to: `/app/quiz/path/${origin.pathSlug}`, label: 'Back to course quizzes' }
     : { to: '/app/quiz', label: 'Back to quizzes' };
 
   useEffect(() => {
@@ -70,8 +89,60 @@ export default function QuizPlayer() {
   const isMulti = currentQuestion?.questionType === 'multiple-select';
   const requiredPicks = isMulti ? (currentQuestion?.selectionCount || 2) : 1;
 
+  // Integrity guards apply to assessment-mode quizzes (finals) only —
+  // learning checkpoints keep the relaxed, open experience.
+  const attemptId = attempt?._id;
+  const isAssessment = attempt?.mode === 'assessment';
+  const lastFlagAt = useRef({});
+
+  // Report an integrity flag to the backend — throttled per type, silent.
+  const reportFlag = useCallback((type, detail) => {
+    if (!attemptId) return;
+    const now = Date.now();
+    if (now - (lastFlagAt.current[type] || 0) < 3000) return;
+    lastFlagAt.current[type] = now;
+    api.flagAttempt(attemptId, { type, detail }).catch(() => {});
+  }, [attemptId]);
+
+  // Tab/app switches, copy attempts and fullscreen exits are flagged;
+  // copy and context-menu events are blocked outright.
+  useEffect(() => {
+    if (!attemptId || !isAssessment || phase !== 'quiz') return;
+
+    const onVisibility = () => { if (document.hidden) reportFlag('tab-switch', 'tab hidden'); };
+    const onBlur = () => reportFlag('tab-switch', 'window lost focus');
+    const onCopy = (e) => { e.preventDefault(); reportFlag('copy-paste', 'copy/cut attempted'); };
+    const onContext = (e) => e.preventDefault();
+    const onFullscreen = () => { if (!document.fullscreenElement) reportFlag('other', 'exited fullscreen'); };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('cut', onCopy);
+    document.addEventListener('contextmenu', onContext);
+    document.addEventListener('fullscreenchange', onFullscreen);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('cut', onCopy);
+      document.removeEventListener('contextmenu', onContext);
+      document.removeEventListener('fullscreenchange', onFullscreen);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
+  }, [attemptId, isAssessment, phase, reportFlag]);
+
+  // Fullscreen needs a user gesture, so request it on the first option
+  // click — a harmless no-op if the browser refuses.
+  const requestFullscreen = () => {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
+
   const handleSelect = (key) => {
     if (feedback) return; // locked after submit
+    if (isAssessment) requestFullscreen();
     setSelectedKeys((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
@@ -154,7 +225,8 @@ export default function QuizPlayer() {
     const penaltyPts = -(attempt.responses || []).reduce((s, r) => s + Math.min(0, r.pointsAwarded || 0), 0);
 
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className={`max-w-2xl mx-auto space-y-6 ${isAssessment ? 'select-none' : ''}`}>
+        {isAssessment && <Watermark user={user} />}
         <div className={`card p-8 text-center ${passed ? 'border-green-600/30' : 'border-yellow-600/30'}`}>
           <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center mb-4 ${passed ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
             {passed ? <Trophy size={36} className="text-green-600 dark:text-green-400" /> : <AlertCircle size={36} className="text-yellow-600 dark:text-yellow-400" />}
@@ -216,7 +288,9 @@ export default function QuizPlayer() {
                         opt.isCorrect
                           ? 'bg-green-500/10 text-green-600 dark:text-green-400'
                           : response?.selectedKeys?.includes(opt.key)
-                          ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                          ? response?.isCorrect === false
+                            ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                            : 'bg-green-500/10 text-green-600 dark:text-green-400'
                           : 'text-subtle'
                       }`}
                     >
@@ -249,7 +323,8 @@ export default function QuizPlayer() {
 
   // Quiz question screen
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className={`max-w-2xl mx-auto space-y-6 ${isAssessment ? 'select-none' : ''}`}>
+      {isAssessment && <Watermark user={user} />}
       {/* Progress bar */}
       <div>
         <div className="flex items-center justify-between mb-2">

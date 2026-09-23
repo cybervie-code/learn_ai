@@ -1,9 +1,11 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5055/api';
 
 const client = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -16,11 +18,27 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors globally
+// Handle auth errors globally + transparently retry when the server is
+// unreachable (sleeping dyno, network blip) instead of hanging forever
 client.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    toast.dismiss('api-retry');
+    return response;
+  },
+  async (error) => {
+    const config = error.config || {};
+    // No response at all — request never reached the server (cold start,
+    // network drop). Retry up to 2x with a visible "waking up" notice.
+    if (!error.response && (config._retryCount || 0) < 2) {
+      config._retryCount = (config._retryCount || 0) + 1;
+      if (config._retryCount === 1) {
+        toast('Server is waking up — retrying…', { icon: '⏳', id: 'api-retry', duration: 8000 });
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+      return client(config);
+    }
     if (error.response?.status === 401) {
+      toast.dismiss('api-retry');
       localStorage.removeItem('cybervie_token');
       localStorage.removeItem('cybervie_user');
       const onAuthPage = ['/login', '/admin/login'].includes(window.location.pathname);
@@ -80,6 +98,7 @@ export const api = {
   startAttempt: (quizId) => client.post('/attempts/start', { quizId }),
   submitAnswer: (attemptId, data) => client.post(`/attempts/${attemptId}/answer`, data),
   submitAttempt: (attemptId) => client.post(`/attempts/${attemptId}/submit`),
+  flagAttempt: (attemptId, data) => client.post(`/attempts/${attemptId}/flag`, data),
   getMyAttempts: (params) => client.get('/attempts/me', { params }),
   getAttemptResults: (id) => client.get(`/attempts/${id}/results`),
 
