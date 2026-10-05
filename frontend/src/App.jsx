@@ -8,7 +8,7 @@ import PublicLayout from './components/layout/PublicLayout.jsx';
 import DashboardLayout from './components/layout/DashboardLayout.jsx';
 import AdminLayout from './components/layout/AdminLayout.jsx';
 
-import Home from './pages/public/Home.jsx';
+import Landing from './pages/public/Landing.jsx';
 import Login from './pages/public/Login.jsx';
 import AdminLogin from './pages/public/AdminLogin.jsx';
 import About from './pages/public/About.jsx';
@@ -79,8 +79,9 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* Public */}
+          {/* Landing ships its own nav/footer — rendered outside PublicLayout */}
+          <Route path="/" element={<Landing />} />
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
             <Route path="/paths" element={<PublicPaths />} />
             <Route path="/rankings" element={<PublicRankings />} />

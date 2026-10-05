@@ -27,11 +27,71 @@ function fromAddress() {
 
 export async function sendEmail({ to, subject, html, text }) {
   try {
-    await getTransporter().sendMail({ from: fromAddress(), to, subject, html, text });
+    return await getTransporter().sendMail({ from: fromAddress(), to, subject, html, text });
   } catch (err) {
     console.error('Email send failed:', err.message);
     throw ApiError.badRequest('Failed to send email. Please try again later.');
   }
+}
+
+function escapeHtml(s = '') {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/**
+ * Notification sent to admin when someone submits the landing-page
+ * "Apply to the program" form.
+ */
+export async function sendApplicationEmail(application) {
+  const to = process.env.ADMIN_NOTIFY_EMAIL || 'admin@cybervie.in';
+  const subject = `New program application — ${application.name}`;
+  const row = (label, value) => `
+      <tr>
+        <td style="padding:7px 12px;color:#94a3b8;font-size:13px;vertical-align:top;white-space:nowrap">${label}</td>
+        <td style="padding:7px 12px;color:#e2e8f0;font-size:13px">${escapeHtml(value) || '—'}</td>
+      </tr>`;
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f172a;border-radius:12px;color:#e2e8f0">
+      <h2 style="margin:0 0 8px;color:#818cf8">Cybervie</h2>
+      <h3 style="margin:0 0 4px;color:#e2e8f0">New program application</h3>
+      <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">Submitted via the landing page "Apply to the program" form.</p>
+      <table style="width:100%;border-collapse:collapse;background:#1e293b;border-radius:8px">
+        ${row('Name', application.name)}
+        ${row('Email', application.email)}
+        ${row('Phone', application.phone)}
+        ${row('Current role', application.currentRole)}
+        ${row('Experience', application.yearsExperience)}
+        ${row('Industry', application.industry)}
+        ${row('Desired AI role', application.desiredAiRole)}
+        ${row('Preferred track', application.preferredTrack)}
+        ${row('Current skills', application.currentSkills)}
+        ${row('Why transitioning', application.transitionReason)}
+        ${row('LinkedIn', application.linkedin)}
+      </table>
+      <p style="margin:16px 0 0;color:#64748b;font-size:12px">Application ID: ${application._id} · Received ${new Date(application.createdAt).toLocaleString('en-IN')}</p>
+    </div>
+  `;
+
+  const text = [
+    'New program application',
+    '',
+    `Name: ${application.name}`,
+    `Email: ${application.email}`,
+    `Phone: ${application.phone}`,
+    `Current role: ${application.currentRole}`,
+    `Experience: ${application.yearsExperience}`,
+    `Industry: ${application.industry}`,
+    `Desired AI role: ${application.desiredAiRole}`,
+    `Preferred track: ${application.preferredTrack}`,
+    `Current skills: ${application.currentSkills}`,
+    `Why transitioning: ${application.transitionReason}`,
+    `LinkedIn: ${application.linkedin || '—'}`,
+    '',
+    `Application ID: ${application._id}`,
+  ].join('\n');
+
+  return sendEmail({ to, subject, html, text });
 }
 
 export async function sendOtpEmail(to, otp, purpose) {

@@ -124,6 +124,9 @@ export const api = {
   createAssignment: (data) => client.post('/assignments', data),
   getAssignmentResults: (id) => client.get(`/assignments/${id}/results`),
 
+  // Applications (public landing-page form)
+  submitApplication: (data) => client.post('/applications', data),
+
   // Users
   listCollegeUsers: (params) => client.get('/users/college', { params }),
   listAllUsers: (params) => client.get('/users/all', { params }),

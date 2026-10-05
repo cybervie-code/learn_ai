@@ -14,6 +14,7 @@ import rankingRoutes from './routes/rankingRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import assignmentRoutes from './routes/assignmentRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import applicationRoutes from './routes/applicationRoutes.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
@@ -84,6 +85,7 @@ app.use('/api/rankings', rankingRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/applications', applicationRoutes);
 
 // 404
 app.use(notFoundHandler);

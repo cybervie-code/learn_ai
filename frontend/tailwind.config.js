@@ -43,10 +43,29 @@ export default {
         content: 'rgb(var(--color-content) / <alpha-value>)',
         muted: 'rgb(var(--color-muted) / <alpha-value>)',
         subtle: 'rgb(var(--color-subtle) / <alpha-value>)',
+
+        // Landing page (AI Career Elevate) palette — backed by --ace-* vars
+        // scoped to the .ace wrapper in index.css, so these resolve only there.
+        background: 'oklch(var(--ace-background) / <alpha-value>)',
+        foreground: 'oklch(var(--ace-foreground) / <alpha-value>)',
+        primary: 'oklch(var(--ace-primary) / <alpha-value>)',
+        'primary-foreground': 'oklch(var(--ace-primary-foreground) / <alpha-value>)',
+        secondary: 'oklch(var(--ace-secondary) / <alpha-value>)',
+        'secondary-foreground': 'oklch(var(--ace-secondary-foreground) / <alpha-value>)',
+        'muted-foreground': 'oklch(var(--ace-muted-foreground) / <alpha-value>)',
+        accent: 'oklch(var(--ace-accent) / <alpha-value>)',
+        'accent-foreground': 'oklch(var(--ace-accent-foreground) / <alpha-value>)',
+        destructive: 'oklch(var(--ace-destructive) / <alpha-value>)',
+        'destructive-foreground': 'oklch(var(--ace-destructive-foreground) / <alpha-value>)',
+        ink: 'oklch(var(--ace-ink) / <alpha-value>)',
+        'ink-soft': 'oklch(var(--ace-ink-soft) / <alpha-value>)',
+        signal: 'oklch(var(--ace-signal) / <alpha-value>)',
+        ring: 'oklch(var(--ace-ring) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
+        display: ['Space Grotesk', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',

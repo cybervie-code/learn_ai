@@ -43,6 +43,14 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 4.5rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
   /* Grid items default to min-width:auto, so an auto-sized track can grow to
      the widest child's min-content (e.g. line-clamped titles measure at their
      full unwrapped width) and push the whole page into horizontal scroll.
@@ -107,4 +115,96 @@
   .sidebar-link-active {
     @apply sidebar-link bg-brand-600/15 text-brand-600 dark:text-brand-400 border-l-2 border-brand-500;
   }
+  .eyebrow { @apply text-xs font-bold uppercase tracking-[.25em] text-[#ef6b3a]; }
+}
+
+/*
+  ============================================================================
+  AI Career Elevate landing page styles — scoped to the .ace wrapper so the
+  Lovable design tokens can't leak into (or clash with) the rest of the app.
+  Color vars hold oklch channels consumed by tailwind.config.js ace tokens.
+  ============================================================================
+*/
+.ace {
+  --ace-background: 0.972 0.008 224;
+  --ace-foreground: 0.17 0.038 251;
+  --ace-primary: 0.46 0.13 233;
+  --ace-primary-foreground: 1 0 0;
+  --ace-secondary: 0.88 0.039 214;
+  --ace-secondary-foreground: 0.18 0.035 250;
+  --ace-muted-foreground: 0.45 0.025 240;
+  --ace-accent: 0.87 0.043 213;
+  --ace-accent-foreground: 0.19 0.055 235;
+  --ace-destructive: 0.56 0.2 25;
+  --ace-destructive-foreground: 1 0 0;
+  --ace-ink: 0.12 0.034 252;
+  --ace-ink-soft: 0.19 0.042 245;
+  --ace-signal: 0.8 0.145 196;
+  --ace-ring: 0.57 0.12 226;
+
+  --ace-border: 0.84 0.022 229;
+  --ace-input: 0.79 0.027 224;
+  --ace-line: 0.79 0.12 200;
+  --ace-grid-light: 0.34 0.095 218;
+  --ace-glow: 0.78 0.15 195;
+
+  /* sRGB overrides of shared app tokens used inside the landing only
+     (bg-card / bg-surface / border-border / bg-muted / border-input) */
+  --color-card: 250 251 252;
+  --color-surface: 232 237 243;
+  --color-border: 205 214 227;
+  --color-muted: 233 238 243;
+  --color-input: 185 197 213;
+  --color-content: 24 32 52;
+  --color-subtle: 96 104 124;
+
+  font-family: 'Manrope', system-ui, sans-serif;
+  color: oklch(var(--ace-foreground));
+  background: oklch(var(--ace-background));
+}
+
+.ace h1, .ace h2, .ace h3, .ace h4 { font-family: 'Space Grotesk', sans-serif; }
+.ace ::selection { background: oklch(var(--ace-signal)); color: oklch(var(--ace-ink)); }
+
+.ace .section-wrap { width: min(100% - 2.5rem, 1320px); margin-inline: auto; }
+.ace .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: .66rem; font-weight: 600; text-transform: uppercase; letter-spacing: .11em; color: inherit; }
+.ace .section-title { font-family: 'Space Grotesk', sans-serif; font-weight: 600; line-height: 1.07; font-size: clamp(2.2rem, 4.5vw, 4.4rem); letter-spacing: -0.01em; }
+
+.ace .hero-backdrop { background: linear-gradient(90deg, oklch(var(--ace-ink)) 0%, oklch(var(--ace-ink) / 94%) 34%, oklch(var(--ace-ink) / 42%) 75%, oklch(var(--ace-ink) / 16%) 100%), linear-gradient(0deg, oklch(var(--ace-ink)), transparent 35%); }
+.ace .hero-grid { background-image: linear-gradient(oklch(var(--ace-line) / 22%) 1px, transparent 1px), linear-gradient(90deg, oklch(var(--ace-line) / 22%) 1px, transparent 1px); background-size: 76px 76px; mask-image: linear-gradient(to right, transparent, black); -webkit-mask-image: linear-gradient(to right, transparent, black); }
+.ace .dark-grid { background-image: linear-gradient(oklch(var(--ace-line) / 22%) 1px, transparent 1px), linear-gradient(90deg, oklch(var(--ace-line) / 22%) 1px, transparent 1px); background-size: 76px 76px; }
+.ace .light-grid { background-image: linear-gradient(oklch(var(--ace-grid-light) / 7%) 1px, transparent 1px), linear-gradient(90deg, oklch(var(--ace-grid-light) / 7%) 1px, transparent 1px); background-size: 76px 76px; }
+.ace .hairline { border-color: oklch(var(--ace-line) / 22%); }
+.ace .bg-line { background-color: oklch(var(--ace-line) / 22%); }
+.ace .hero-title { max-width: 11ch; text-wrap: balance; text-shadow: 0 8px 42px color-mix(in oklab, oklch(var(--ace-ink)) 70%, transparent); }
+.ace .hero-title span { text-shadow: 0 0 38px oklch(var(--ace-glow) / 28%); }
+.ace .hero-cta { box-shadow: 0 0 0 1px oklch(var(--ace-glow) / 28%), 0 0 36px color-mix(in oklab, oklch(var(--ace-signal)) 18%, transparent); }
+.ace .hero-cta:hover { box-shadow: 0 0 0 1px oklch(var(--ace-signal)), 0 0 48px color-mix(in oklab, oklch(var(--ace-signal)) 30%, transparent); }
+
+.ace .system-frame { position: relative; isolation: isolate; }
+.ace .system-frame::before, .ace .system-frame::after { content: ""; position: absolute; z-index: 1; width: 18px; height: 18px; pointer-events: none; }
+.ace .system-frame::before { top: -1px; left: -1px; border-top: 2px solid oklch(var(--ace-signal)); border-left: 2px solid oklch(var(--ace-signal)); }
+.ace .system-frame::after { right: -1px; bottom: -1px; border-right: 2px solid oklch(var(--ace-signal)); border-bottom: 2px solid oklch(var(--ace-signal)); }
+
+.ace .data-label { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+.ace .interactive-panel { transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease, transform .25s ease; }
+.ace .interactive-panel:hover { box-shadow: inset 0 0 0 1px color-mix(in oklab, oklch(var(--ace-signal)) 38%, transparent); transform: translateY(-2px); }
+.ace .section-divider { border-top: 1px solid oklch(var(--ace-border)); }
+.ace .section-divider::before { content: ""; display: block; width: 76px; height: 2px; background: oklch(var(--ace-signal)); }
+.ace .pathway-step { transition: background-color .3s ease; }
+.ace .pathway-step:hover { background: color-mix(in oklab, oklch(var(--ace-signal)) 13%, oklch(var(--ace-ink))); }
+.ace .nav-link { position: relative; }
+.ace .nav-link::after { content: ""; position: absolute; bottom: -7px; left: 0; width: 100%; height: 1px; background: oklch(var(--ace-signal)); transform: scaleX(0); transform-origin: left; transition: transform .25s ease; }
+.ace .nav-link:hover::after { transform: scaleX(1); }
+.ace .fade-up { animation: ace-fade-up .75s ease both; }
+.ace .fade-up-delay { animation: ace-fade-up .85s .16s ease both; }
+@keyframes ace-fade-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 639px) {
+  .ace .hero-backdrop { background: linear-gradient(90deg, oklch(var(--ace-ink) / 93%), oklch(var(--ace-ink) / 67%)), linear-gradient(0deg, oklch(var(--ace-ink)), transparent 70%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ace .fade-up, .ace .fade-up-delay { animation: none; }
+  .ace .interactive-panel, .ace .pathway-step, .ace .nav-link::after { transition: none; }
+  .ace .interactive-panel:hover { transform: none; }
 }
