@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, Brain, Trophy, User,
-  ClipboardList, Users,
+  ClipboardList, Users, Award,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../BrandLogo.jsx';
@@ -15,6 +15,7 @@ export default function Sidebar({ onNavigate }) {
     { to: '/app/quiz', label: 'Quiz', icon: Brain },
     { to: '/app/rankings', label: 'Rankings', icon: Trophy },
     { to: '/app/assignments', label: 'Assignments', icon: ClipboardList },
+    { to: '/app/certificate', label: 'Certificate', icon: Award },
     { to: '/app/profile', label: 'Profile', icon: User },
   ];
 

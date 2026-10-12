@@ -4,11 +4,16 @@ import { User } from '../models/User.js';
 
 export async function authenticate(req, res, next) {
   try {
+    let token = null;
     const header = req.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
+    if (header && header.startsWith('Bearer ')) {
+      token = header.split(' ')[1];
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
+    }
+    if (!token) {
       throw ApiError.unauthorized('No token provided');
     }
-    const token = header.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('-password').lean();
     if (!user) {

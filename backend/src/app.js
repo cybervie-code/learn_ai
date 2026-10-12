@@ -3,6 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import authRoutes from './routes/authRoutes.js';
 import collegeRoutes from './routes/collegeRoutes.js';
@@ -15,6 +20,8 @@ import profileRoutes from './routes/profileRoutes.js';
 import assignmentRoutes from './routes/assignmentRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import applicationRoutes from './routes/applicationRoutes.js';
+import certificateRoutes from './routes/certificateRoutes.js';
+import adminCertificateRoutes from './routes/adminCertificateRoutes.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
@@ -69,6 +76,9 @@ const authLimiter = rateLimit({
 app.use('/api', apiLimiter);
 app.use('/api/auth', authLimiter);
 
+// Serve static files
+app.use('/public', express.static(path.join(__dirname, '../public')));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ success: true, message: 'Cybervie API is running', timestamp: new Date().toISOString() });
@@ -86,6 +96,8 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/applications', applicationRoutes);
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/admin/certificates', adminCertificateRoutes);
 
 // 404
 app.use(notFoundHandler);

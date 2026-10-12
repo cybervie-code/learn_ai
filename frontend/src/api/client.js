@@ -133,4 +133,14 @@ export const api = {
   createUser: (data) => client.post('/users', data),
   updateUserStatus: (id, status) => client.patch(`/users/${id}/status`, { status }),
   updateUserRole: (id, role) => client.patch(`/users/${id}/role`, { role }),
+
+  // Certificates
+  getCertificateStatus: () => client.get('/certificates/status'),
+  requestCertificate: () => client.post('/certificates/request'),
+  listAllCertificates: () => client.get('/admin/certificates/certificates'),
+  listEligibleStudents: () => client.get('/admin/certificates/eligible'),
+  addEligibleStudents: (emails) => client.post('/admin/certificates/eligible', { emails }),
+  removeEligibleStudent: (email) => client.delete(`/admin/certificates/eligible/${encodeURIComponent(email)}`),
+  updateEligibleStatus: (email, status) => client.patch(`/admin/certificates/eligible/${encodeURIComponent(email)}/status`, { status }),
+  activateAllEligible: () => client.post('/admin/certificates/eligible/activate-all'),
 };

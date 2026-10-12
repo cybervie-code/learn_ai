@@ -1,17 +1,50 @@
-import { useMemo, useState } from 'react';
+/* ======================================================================
+   Landing — CCAEP 2026 design ported from the Lovable "cybervie-hub"
+   remix (TanStack/TS + Tailwind v4 source → our JSX + Tailwind v3 stack).
+
+   Styling lives in index.css scoped under the .ccaep wrapper. Two sections
+   of the previous landing are preserved verbatim and rendered inside .ace
+   wrappers: the career mapper ("Existing experience → AI role") and the
+   application form ("Apply").
+   ====================================================================== */
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, ArrowUpRight, Blocks, Check, ChevronRight, Database,
-  GitBranch, Loader2, Menu, ShieldCheck, Sparkles, X,
+  ArrowRight, ArrowUpRight, Check, ChevronDown, Cloud, Code2,
+  Cpu, Download, Layers3, Menu, Moon, Network, ScanLine, ShieldCheck,
+  Sun, Terminal, Workflow, X,
 } from 'lucide-react';
 import BrandLogo from '../../components/BrandLogo.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useTheme } from '../../context/ThemeContext.jsx';
 import { api } from '../../api/client.js';
-import { careerMap, industries, tracks, weeks } from '../../lib/academy-data.js';
-import heroImage from '../../assets/enterprise-ai-workspace.jpg';
+import { careerMap, industries, tracks } from '../../lib/academy-data.js';
+import coreImage from '../../assets/ai-engine-core.jpg';
 
 /* ------------------------------------------------------------------ */
-/* shadcn-style button variants used across the landing                */
+/* Button helpers — new design (shadcn-style variants)                 */
+/* ------------------------------------------------------------------ */
+const LP_BASE =
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
+const LP_VARIANTS = {
+  default: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
+  destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+  outline: 'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
+  secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+  ghost: 'hover:bg-accent hover:text-accent-foreground',
+  link: 'text-primary underline-offset-4 hover:underline',
+};
+const LP_SIZES = {
+  default: 'h-9 px-4 py-2',
+  sm: 'h-8 rounded-md px-3 text-xs',
+  lg: 'h-10 rounded-md px-8',
+  icon: 'h-9 w-9',
+};
+const lp = (variant = 'default', size = 'default', cls = '') =>
+  `${LP_BASE} ${LP_VARIANTS[variant]} ${LP_SIZES[size]} ${cls}`;
+
+/* ------------------------------------------------------------------ */
+/* Button machinery kept for the preserved .ace sections below         */
 /* ------------------------------------------------------------------ */
 const BTN_BASE =
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0';
@@ -57,295 +90,420 @@ const FIELD_CLS =
 const INPUT_CLS = `${FIELD_CLS} h-11`;
 const SELECT_CLS = `${FIELD_CLS} h-11 bg-background`;
 
-const NAV = [
-  ['Career paths', '#career-paths'],
-  ['Career mapper', '#career-mapper'],
-  ['Project lab', '#projects'],
-  ['Program', '#program'],
-  ['Project advisor', '#project-advisor'],
+/* ------------------------------------------------------------------ */
+/* CCAEP landing content                                               */
+/* ------------------------------------------------------------------ */
+const modules = [
+  { icon: Cpu, title: 'Understand the intelligence.', detail: 'Neural networks, tokens, embeddings and attention. Build a GPT from scratch, then optimize it for inference.', classes: '01–10', topic: 'MODEL FOUNDATIONS' },
+  { icon: Layers3, title: 'Build beyond the prompt.', detail: 'Production LLM APIs, streaming, structured outputs and end-to-end RAG with hybrid search and reranking.', classes: '11–23', topic: 'LLM APPLICATIONS & RAG' },
+  { icon: Workflow, title: 'Give AI the ability to act.', detail: 'ReAct agents, LangGraph, memory, context engineering, MCP and multi-agent systems with human approval.', classes: '27–32', topic: 'AGENTS & ORCHESTRATION' },
+  { icon: ScanLine, title: 'Make quality measurable.', detail: 'Golden datasets, RAG evaluation, LLM-as-judge, tracing and observability. Test intelligence, not just code.', classes: '24–26', topic: 'EVALUATION & OBSERVABILITY' },
+  { icon: Cloud, title: 'Ship it to the real world.', detail: 'Reasoning and multimodal models, LoRA, vLLM, Docker, Kubernetes, AWS Bedrock and production LLMOps.', classes: '33–40', topic: 'CUSTOMIZATION & DEPLOYMENT' },
+  { icon: ShieldCheck, title: 'Engineer with confidence.', detail: 'AI security, guardrails and governance. Deliver your capstone, sharpen system design and map your next career move.', classes: '41–45', topic: 'SECURITY & CAREER LAUNCH' },
 ];
 
-const PATHWAY = ['Your experience', 'AI skills', 'Industry project', 'AI career path'];
+const projects = [
+  ['Production RAG system', 'An evaluated, fully traced retrieval application with a live dashboard and real document-grounded answers.'],
+  ['Multi-agent application', 'Agents with memory, MCP tools, human approval and a complete evaluation suite.'],
+  ['Customized model', 'Hands-on model customization and inference serving with the fine-tuning tools covered in class.'],
+  ['Production LLMOps pipeline', 'A pipeline that tests, evaluates, builds and deploys on merge, with a runbook and incident simulation.'],
+  ['Your deployed capstone', 'Bring everything together in a deployed AI product, with a live demo, GitHub repository and system-design story.'],
+];
 
-export default function Landing() {
+const faqs = [
+  ['Who is CCAEP for?', 'Software developers, IT professionals, data practitioners, technical leads, founders, fresh graduates and career switchers who want to build production AI systems.'],
+  ['Do I need an AI or machine learning background?', 'The course starts with neural networks and model foundations. Working Python is expected for fresh graduates and career switchers; an AI-specific degree is not required.'],
+  ['How is the course structured?', 'There are 45 live classes, with roughly 60% of class time devoted to hands-on labs. The journey covers model internals, LLM applications, RAG, evaluation, agents, cloud deployment, security and career planning.'],
+  ['What will I have built by the end?', 'Four portfolio projects and a deployed capstone, with practical work across RAG, multi-agent systems, model customization and production LLMOps.'],
+  ['Which tools and platforms will I use?', 'Python, PyTorch, FastAPI, OpenAI, Claude, Gemini, pgvector, LangChain, LangGraph, MCP, Docker and Kubernetes. Cloud training focuses on AWS Bedrock, with Azure and GCP compared.'],
+  ['Where can I find fees and upcoming batch dates?', 'Visit Cybervie for the latest enrollment information. Fees and upcoming batch dates are not specified in the course brochure.'],
+];
+
+const curriculum = [
+  ['01', '01–06', 'Neural networks, tokens & attention', 'Train a neural network on MNIST. Explore tokenization, embeddings, QKV projections and self-, cross- and multi-head attention.', 'Lab: build a multi-head attention module.'],
+  ['02', '07–10', 'Build & optimize a transformer', 'Causal masking, decoder-only transformers, pretraining and post-training, distributed training, KV caching, quantization and LoRA.', 'Lab: code a GPT from scratch and explore inference optimization.'],
+  ['03', '11–15', 'Production LLM applications', 'Prompting, provider APIs, structured outputs, tool calling, caching, routing, cost and latency control, and serving with FastAPI.', 'Deliverable: a tested streaming chat API with a lightweight UI.'],
+  ['04', '16–23', 'Retrieval-augmented generation', 'Chunking, vector databases, hybrid search, reranking, query rewriting, GraphRAG, KAG, agentic and multimodal RAG, guardrails and Code RAG.', 'Build: an end-to-end document-grounded RAG system.'],
+  ['05', '24–26', 'Evaluation & observability', 'Golden datasets, RAG-specific evaluation, LLM-as-judge, CI evaluation gates, Langfuse, LangSmith and OpenTelemetry tracing.', 'Deliverable: a fully traced RAG project with a live dashboard.'],
+  ['06', '27–32', 'Agents, context engineering & MCP', 'ReAct, Pydantic AI, LangChain, LangGraph, context engineering, memory, MCP, multi-agent orchestration and agent evaluation.', 'Project: multi-agent system with memory, MCP tools and human approval.'],
+  ['07', '33–37', 'Reasoning, multimodal & customization', 'Thinking models, CLIP, vision-language models, diffusion, prompting vs RAG vs fine-tuning, LoRA/QLoRA and vLLM.', 'Practice: customize models and serve inference.'],
+  ['08', '38–40', 'Cloud deployment & LLMOps', 'Docker, Kubernetes, AWS Bedrock, Azure and GCP comparisons, GitHub Actions, MLflow, monitoring, rollbacks and cost governance.', 'Project: a tested deployment pipeline, runbook and simulated incident.'],
+  ['09', '41', 'AI security & governance', 'Prompt-injection defense, guardrails, PII handling, OWASP LLM Top 10, NIST AI RMF, ISO/IEC 42001 and the EU AI Act.', 'Practice: secure and govern production AI systems.'],
+  ['10', '42–45', 'Capstone & career launch', 'Deploy your capstone, present a live demo, prepare for system-design interviews and map the transition from your current IT role.', 'Deliverable: a polished portfolio, personal career plan and 10 target roles.'],
+];
+
+const roadmapSteps = [
+  ['Map your starting point', 'Connect your development, data, infrastructure, testing or business experience to a target AI role.', 'Your skills → your role'],
+  ['Build the engineering foundation', 'Learn model internals, reliable APIs and retrieval. Turn knowledge into working, tested applications.', 'Classes 01–23'],
+  ['Prove production readiness', 'Add evaluation, agents, cloud deployment and security. Build four portfolio projects that show your depth.', 'Classes 24–41'],
+  ['Ship your capstone & portfolio', 'Deploy a complete system. Publish a live demo and GitHub repository, with clear technical trade-offs.', 'Classes 42–44'],
+  ['Launch your career transition', 'Polish your resume and LinkedIn profile, shortlist 10 target roles and build a job-search and 12-month growth plan.', 'Class 45 · your next chapter'],
+];
+
+const careerCards = [
+  ['Software development', 'AI Engineer · Applied AI Engineer', Code2],
+  ['Data & machine learning', 'LLM Engineer · AI Platform Engineer', Network],
+  ['Infrastructure & DevOps', 'MLOps Engineer · LLMOps Engineer', Cloud],
+  ['Testing & security', 'AI Evaluation Engineer · AI Security Engineer', ShieldCheck],
+];
+
+const NAV_LINKS = [
+  ['Curriculum', '#curriculum'],
+  ['Projects', '#projects'],
+  ['Career paths', '#careers'],
+  ['FAQs', '#faq'],
+];
+
+/* ------------------------------------------------------------------ */
+/* Header / shared bits                                                */
+/* ------------------------------------------------------------------ */
+function Brand() {
+  return (
+    <a href="#top" className="brand gap-3" aria-label="Cybervie home">
+      <BrandLogo className="brand-logo" />
+      <span className="font-display text-lg font-semibold leading-none">
+        Cybervie<span className="text-primary">.AI</span>
+      </span>
+    </a>
+  );
+}
+
+function ApplyButton({ compact = false }) {
+  return <a href="#apply" className={lp('default', compact ? 'default' : 'lg')}>Apply now <ArrowUpRight /></a>;
+}
+
+function SyllabusButton() {
+  return (
+    <a href="/CCAEP_Brochure.pdf" download="CCAEP_Brochure.pdf" className={lp('outline', 'lg')}>
+      <Download /> Download syllabus
+    </a>
+  );
+}
+
+function LandingHeader() {
   const { user } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [open, setOpen] = useState(false);
+
+  const nav = (
+    <>
+      {NAV_LINKS.map(([label, href]) => (
+        <a key={href} href={href} className="nav-link" onClick={() => setOpen(false)}>{label}</a>
+      ))}
+    </>
+  );
+
+  const sessionButton = (
+    <Link
+      to={user ? '/app' : '/login'}
+      className={lp('outline', 'default', 'w-fit')}
+      onClick={() => setOpen(false)}
+    >
+      {user ? 'Dashboard' : 'Sign in'}
+    </Link>
+  );
 
   return (
-    <main className="ace overflow-hidden bg-background">
-      {/* ============ HEADER ============ */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b hairline bg-ink/90 text-primary-foreground shadow-[0_12px_32px_-20px_oklch(var(--ace-glow)/28%)] backdrop-blur-xl">
-        <div className="section-wrap flex h-[4.5rem] items-center justify-between">
-          <a href="#top" className="flex items-center gap-3" aria-label="Cybervie.AI home">
-            <span className="system-frame grid size-9 place-items-center border hairline bg-primary/15">
-              <BrandLogo className="size-6" />
-            </span>
-            <span className="font-display text-sm font-semibold leading-tight">
-              Cybervie<span className="text-signal">.AI</span>
-            </span>
-          </a>
-
-          <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary navigation">
-            {NAV.map(([label, href]) => (
-              <a key={href} href={href} className="nav-link text-xs font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">
-                {label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="hidden items-center gap-5 lg:flex">
-            {user ? (
-              <Link to="/app" className="nav-link text-xs font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">Dashboard</Link>
-            ) : (
-              <Link to="/login" className="nav-link text-xs font-semibold text-primary-foreground/70 transition-colors hover:text-primary-foreground">Sign in</Link>
-            )}
-            <a href="#apply" className={btn('default', 'sm')}>Apply to the program <ArrowUpRight /></a>
+    <header className="site-header">
+      <div className="page-width flex h-full items-center justify-between gap-3">
+        <Brand />
+        <nav className="hidden items-center gap-6 lg:flex" aria-label="Main navigation">{nav}</nav>
+        <div className="flex items-center gap-3">
+          <div className="theme-switch" role="group" aria-label="Color theme">
+            <button type="button" className={lp('ghost', 'icon')} onClick={() => setTheme('light')} aria-label="Light theme" title="Light theme" aria-pressed={theme === 'light'}><Sun /></button>
+            <button type="button" className={lp('ghost', 'icon')} onClick={() => setTheme('dark')} aria-label="Dark theme" title="Dark theme" aria-pressed={theme === 'dark'}><Moon /></button>
           </div>
-
-          <button className="text-primary-foreground lg:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation">
-            {menuOpen ? <X /> : <Menu />}
+          <div className="hidden sm:flex items-center gap-2">{sessionButton}<ApplyButton compact /></div>
+          <button type="button" className={`${lp('ghost', 'icon')} lg:hidden`} onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}>
+            {open ? <X /> : <Menu />}
           </button>
         </div>
-
-        {menuOpen && (
-          <nav className="section-wrap flex flex-col border-t hairline py-5 lg:hidden" onClick={() => setMenuOpen(false)}>
-            {NAV.map(([label, href]) => (
-              <a key={href} href={href} className="border-b hairline py-3 text-sm">{label}</a>
-            ))}
-            {user
-              ? <Link to="/app" className="pt-4 text-sm font-bold text-signal">Dashboard</Link>
-              : <Link to="/login" className="pt-4 text-sm font-bold text-signal">Sign in</Link>}
-            <a href="#apply" className="pt-3 text-sm font-bold text-signal">Apply to the program</a>
-          </nav>
-        )}
-      </header>
-
-      {/* ============ HERO ============ */}
-      <section id="top" className="relative min-h-[760px] bg-ink text-primary-foreground lg:min-h-[790px]">
-        <img src={heroImage} width={1536} height={1024} alt="" aria-hidden="true" fetchpriority="high" decoding="async" className="absolute inset-0 size-full object-cover object-center" />
-        <div className="hero-backdrop absolute inset-0" />
-        <div className="hero-grid absolute inset-0 opacity-55" />
-        <div className="section-wrap relative flex min-h-[760px] flex-col justify-center pb-40 pt-28 sm:pb-24 lg:min-h-[790px]">
-          <div className="max-w-3xl fade-up">
-            <p className="eyebrow mb-6 inline-flex items-center gap-3 border-l-2 border-signal bg-ink/50 py-2 pl-4 pr-5 text-signal">
-              2-month career transition program
-            </p>
-            <h1 className="hero-title font-display text-5xl font-semibold leading-[.96] sm:text-7xl lg:text-[6.5rem]">
-              Move your career <span className="text-signal">into AI.</span>
-            </h1>
-            <p className="mt-7 max-w-2xl text-base leading-7 text-primary-foreground/70 sm:text-xl sm:leading-8">
-              Build real enterprise AI projects, develop role-specific skills, and use your existing professional experience to transition into the AI ecosystem.
-            </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <a href="#career-paths" className={btn('default', 'lg', 'hero-cta h-12')}>Explore AI career paths <ArrowRight /></a>
-              <a href="#program" className={btn('outline', 'lg', 'h-12 border-primary-foreground/25 bg-primary-foreground/5 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground')}>
-                View the 8-week program
-              </a>
-            </div>
+      </div>
+      {open && (
+        <nav className="mobile-menu flex flex-col gap-6 lg:hidden" aria-label="Mobile navigation">
+          {nav}
+          <div className="flex gap-3">
+            {sessionButton}
+            <a href="#apply" className={lp('default', 'default', 'w-fit')} onClick={() => setOpen(false)}>Apply now <ArrowUpRight /></a>
           </div>
-
-          <div className="system-frame absolute inset-x-5 bottom-0 grid grid-cols-2 border-y hairline bg-ink/80 backdrop-blur-xl sm:grid-cols-4 lg:inset-x-auto lg:w-[min(100%-2.5rem,1320px)] fade-up-delay">
-            {PATHWAY.map((item, i) => (
-              <div key={item} className="pathway-step flex min-h-[4rem] items-center gap-2 border-b hairline px-3 [&:nth-last-child(-n+2)]:border-b-0 even:border-l sm:gap-3 sm:border-b-0 sm:border-r sm:px-4 sm:even:border-l-0 sm:last:border-r-0">
-                <span className="data-label shrink-0 text-xs text-signal">0{i + 1}</span>
-                <span className="text-[10px] font-semibold uppercase sm:text-xs">{item}</span>
-                {i < 3 && <ChevronRight className="ml-auto hidden size-4 text-signal/50 sm:block" />}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ WHY TRANSITION ============ */}
-      <section className="light-grid border-b bg-surface py-20 lg:py-28">
-        <div className="section-wrap grid gap-14 lg:grid-cols-[.85fr_1.15fr]">
-          <div>
-            <p className="eyebrow text-primary">Why career transition</p>
-            <h2 className="section-title mt-5">Your experience is not baggage. It is your advantage.</h2>
-          </div>
-          <div className="grid gap-px overflow-hidden border bg-border sm:grid-cols-2">
-            {[
-              { icon: Database, title: 'Start with domain knowledge', text: 'Understand the decisions, constraints, customers, and workflows that generic AI training misses.' },
-              { icon: Blocks, title: 'Add applied AI skills', text: 'Learn LLMs, RAG, agents, evaluation, architecture, and governance through enterprise use cases.' },
-              { icon: GitBranch, title: 'Build evidence', text: 'Create a project, architecture, business case, implementation roadmap, and executive presentation.' },
-              { icon: ArrowUpRight, title: 'Translate into a role', text: 'Map what you already know to engineering, architecture, product, delivery, consulting, or governance.' },
-            ].map(({ icon: Icon, title, text }) => (
-              <article key={title} className="interactive-panel bg-card p-7 lg:p-9">
-                <Icon className="size-6 text-primary" />
-                <h3 className="mt-8 text-xl font-semibold">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground">{text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-        <div className="section-wrap mt-14 flex flex-col items-start justify-between gap-6 border-t pt-8 lg:flex-row lg:items-center">
-          <p className="font-display text-2xl font-medium lg:text-3xl">
-            Domain Experience <span className="text-primary">+</span> AI Skills <span className="text-primary">=</span> AI Career Opportunity
-          </p>
-          <span className="text-xs font-bold uppercase text-muted-foreground">Built for working professionals</span>
-        </div>
-      </section>
-
-      <CareerExplorer />
-      <CareerMapper />
-      <ProjectLab />
-      <Program />
-      <LearningTracks />
-      <Portfolio />
-      <ProjectAdvisor />
-      <ApplicationForm user={user} />
-
-      {/* ============ FOOTER ============ */}
-      <footer className="bg-ink py-10 text-primary-foreground">
-        <div className="section-wrap flex flex-col justify-between gap-6 border-t hairline pt-8 sm:flex-row">
-          <div className="flex items-center gap-3">
-            <BrandLogo className="size-5" />
-            <span className="font-display font-semibold">Cybervie<span className="text-signal">.AI</span></span>
-          </div>
-          <nav className="flex flex-wrap items-center gap-6 text-xs font-semibold text-primary-foreground/70">
-            <Link to="/paths" className="transition-colors hover:text-primary-foreground">Paths</Link>
-            <Link to="/rankings" className="transition-colors hover:text-primary-foreground">Rankings</Link>
-            <Link to="/about" className="transition-colors hover:text-primary-foreground">About</Link>
-            {user
-              ? <Link to="/app" className="transition-colors hover:text-primary-foreground">Dashboard</Link>
-              : <Link to="/login" className="transition-colors hover:text-primary-foreground">Sign in</Link>}
-          </nav>
-          <p className="max-w-md text-xs leading-5 text-primary-foreground/55">
-            A professional education program. Participation does not guarantee employment, placement, salary, or a specific career outcome.
-          </p>
-        </div>
-      </footer>
-    </main>
+        </nav>
+      )}
+    </header>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Career path explorer — five tracks, role-level detail               */
+/* Sections                                                            */
 /* ------------------------------------------------------------------ */
-function CareerExplorer() {
-  const [active, setActive] = useState(0);
-  const track = tracks[active];
-  const [role, setRole] = useState('AI Engineer');
-  const selectTrack = (i) => {
-    const next = tracks[i];
-    if (!next) return;
-    setActive(i);
-    setRole(next.roles[0] ?? 'AI role');
-  };
-  if (!track) return null;
-
+function Hero() {
   return (
-    <section id="career-paths" className="section-divider bg-background py-20 lg:py-28">
-      <div className="section-wrap">
-        <div className="max-w-3xl">
-          <p className="eyebrow text-primary">AI Career Path Explorer</p>
-          <h2 className="section-title mt-5">Find where your experience can take you.</h2>
-          <p className="mt-5 text-muted-foreground">Explore five career tracks and thirty role options—without discarding the expertise you have already built.</p>
+    <section id="top" className="hero">
+      <img className="hero-art" src={coreImage} alt="Exploded AI computing core with illuminated cyan circuits" width={1920} height={1024} fetchpriority="high" />
+      <div className="page-width hero-content entrance">
+        <div className="eyebrow"><span className="live-dot" /> CCAEP / 2026 EDITION</div>
+        <h1 className="hero-title">AI Engineering<br /><span>Professional</span></h1>
+        <div className="credential">
+          <span className="credential-name">Cybervie Certified AI Engineering Professional</span>
+          <span className="credential-short">(CCAEP)</span>
         </div>
-
-        <div className="mt-12 flex overflow-x-auto border-b">
-          {tracks.map((t, i) => (
-            <button
-              key={t.name}
-              onClick={() => selectTrack(i)}
-              className={`h-14 shrink-0 rounded-none border-b-2 px-5 text-sm font-medium transition-colors ${active === i ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              {t.name}
-            </button>
-          ))}
+        <div className="mb-4 font-display text-xl font-medium">Don’t just use AI. Engineer it.</div>
+        <p className="hero-copy">Go from transformer internals to production-ready GenAI, RAG and agents. Build real systems. Ship a portfolio that speaks for itself.</p>
+        <div className="mt-8 flex flex-wrap gap-3"><ApplyButton /><SyllabusButton /></div>
+        <div className="mt-6 flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+          <Terminal className="size-3.5 text-primary" /> BUILT FOR DEVELOPERS. DESIGNED FOR THE REAL WORLD.
         </div>
+      </div>
+      <div className="hero-tag"><span className="text-accent">SYSTEM_01 / INTELLIGENCE CORE</span><br />MODELS → RETRIEVAL → AGENTS → PRODUCTION</div>
+    </section>
+  );
+}
 
-        <div className="system-frame grid border-x border-b lg:grid-cols-[.75fr_1.25fr]">
-          <aside className="border-b p-5 lg:border-b-0 lg:border-r lg:p-8">
-            <p className="eyebrow text-muted-foreground">Roles in this track</p>
-            <div className="mt-5 flex flex-wrap gap-2 lg:flex-col">
-              {track.roles.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRole(r)}
-                  className={`${btn(role === r ? 'secondary' : 'ghost', 'default', 'justify-between text-left')}`}
-                >
-                  {r}
-                  {role === r && <ArrowRight className="text-primary" />}
-                </button>
-              ))}
-            </div>
-          </aside>
+function StatsStrip() {
+  return (
+    <div className="page-width">
+      <div className="stats">
+        {[['45', 'Live, instructor-led classes'], ['4 + 1', 'Portfolio projects + capstone'], ['60%', 'Hands-on learning'], ['10 years', 'Of upskilling with Cybervie']].map(([value, label]) => (
+          <div className="stat" key={value}>
+            <div className="stat-value">{value}<span className="text-primary">.</span></div>
+            <div className="stat-label">{label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="stack-strip flex flex-wrap items-center justify-between gap-x-8 gap-y-5">
+        <span className="font-mono text-[10px] text-muted-foreground">YOUR PRODUCTION STACK</span>
+        {['Python', 'PyTorch', 'LangChain', 'LangGraph', 'FastAPI', 'AWS Bedrock'].map((name) => (
+          <span className="stack-name" key={name}>{name}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          <article className="p-6 lg:p-10">
-            <div className="flex flex-col justify-between gap-5 border-b pb-7 sm:flex-row">
-              <div>
-                <p className="eyebrow text-primary">{track.name}</p>
-                <h3 className="mt-3 text-3xl font-semibold">{role}</h3>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{track.description}</p>
-              </div>
-              <DepthMeter technical={track.technical} business={track.business} />
+function ModuleGrid() {
+  return (
+    <section id="modules" className="section page-width">
+      <div className="flex flex-wrap items-end justify-between gap-7">
+        <div>
+          <div className="eyebrow">THE LEARNING PATH</div>
+          <h2 className="section-title">From first principles.<br />To production systems.</h2>
+        </div>
+        <a href="#curriculum" className={lp('outline')}>Explore the curriculum <ArrowUpRight /></a>
+      </div>
+      <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {modules.map((m, i) => (
+          <article className="module-card" key={m.topic}>
+            <div className="flex items-center justify-between">
+              <m.icon className="module-icon" />
+              <span className="module-number">{String(i + 1).padStart(2, '0')} / 06</span>
             </div>
-            <div className="grid gap-8 py-8 sm:grid-cols-2">
-              <Info title="Typical responsibilities" items={track.responsibilities} />
-              <Info title="Existing backgrounds" items={track.backgrounds} />
-              <Info title="Skills required" items={track.skills} />
-              <Info title="AI concepts required" items={track.concepts} />
-            </div>
-            <div className="grid gap-px border bg-border sm:grid-cols-2">
-              <div className="bg-surface p-5">
-                <p className="eyebrow text-muted-foreground">Example industry project</p>
-                <p className="mt-2 font-semibold">{track.project}</p>
-              </div>
-              <div className="bg-surface p-5">
-                <p className="eyebrow text-muted-foreground">Portfolio deliverables</p>
-                <p className="mt-2 font-semibold">{track.deliverables.join(' · ')}</p>
-              </div>
+            <h3>{m.title}</h3>
+            <p>{m.detail}</p>
+            <div className="module-footer flex flex-wrap justify-between gap-2">
+              <span>{m.topic}</span>
+              <span>CLASSES {m.classes}</span>
             </div>
           </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DetailedCurriculum() {
+  return (
+    <section id="curriculum" className="section page-width" aria-labelledby="curriculum-heading">
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div>
+          <div className="eyebrow">45 LIVE CLASSES / 10 MODULES</div>
+          <h2 id="curriculum-heading" className="section-title">The course curriculum.</h2>
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-muted-foreground">A complete journey from understanding models to deploying secure, measurable AI systems.</p>
+        </div>
+        <SyllabusButton />
+      </div>
+      <div className="curriculum-list mt-10">
+        {curriculum.map(([number, classes, title, description, lab], i) => (
+          <details className="curriculum-item" key={number} open={i === 0}>
+            <summary>
+              <span className="curriculum-index">{number}</span>
+              <span className="curriculum-name">{title}</span>
+              <span className="curriculum-classes">CLASSES {classes}</span>
+              <ChevronDown className="curriculum-chevron" />
+            </summary>
+            <div className="curriculum-detail">
+              <p>{description}</p>
+              <div className="mt-4 flex items-start gap-2 text-sm text-accent">
+                <Check className="mt-0.5 size-4 shrink-0" /><span>{lab}</span>
+              </div>
+            </div>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CareerRoadmap() {
+  return (
+    <section className="roadmap-band" aria-labelledby="roadmap-heading">
+      <div className="section page-width">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <div className="eyebrow">FROM YOUR CURRENT ROLE TO YOUR NEXT</div>
+            <h2 id="roadmap-heading" className="section-title">Your AI career roadmap.</h2>
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-muted-foreground">A practical progression built around skills, shipped work and a focused career plan.</p>
+          </div>
+          <a href="#careers" className={lp('outline')}>Explore career paths <ArrowUpRight /></a>
+        </div>
+        <ol className="career-timeline mt-12">
+          {roadmapSteps.map(([title, detail, phase], i) => (
+            <li className="career-step" key={title}>
+              <span className="career-step-marker">{String(i + 1).padStart(2, '0')}</span>
+              <div>
+                <div className="eyebrow">{phase}</div>
+                <h3 className="mt-3 font-display text-xl font-medium">{title}</h3>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground">{detail}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-10 border-t border-border pt-7">
+          <span className="eyebrow">KEEP GROWING</span>
+          <p className="mt-4 text-sm leading-7 text-muted-foreground">AI Engineer → Senior / Staff Engineer · Specialist in agents, evaluation or AI security · AI / Solutions Architect · Forward-Deployed Engineer · AI engineering leadership</p>
         </div>
       </div>
     </section>
   );
 }
 
-function DepthMeter({ technical, business }) {
+function Careers() {
   return (
-    <div className="min-w-[13rem] space-y-3 border-l pl-5">
-      <Meter label="Technical depth" value={technical} />
-      <Meter label="Business depth" value={business} />
-    </div>
-  );
-}
-
-function Meter({ label, value }) {
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
-        <span>{label}</span><span>{value}/5</span>
-      </div>
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <span key={n} className={`h-1.5 flex-1 ${n <= value ? 'bg-primary' : 'bg-muted'}`} />
+    <section id="careers" className="section page-width">
+      <div className="eyebrow">YOUR NEXT CHAPTER</div>
+      <h2 className="section-title">Your IT experience.<br />An AI engineering future.</h2>
+      <p className="mt-6 max-w-2xl text-sm leading-8 text-muted-foreground">Build on the skills you already have. The course maps your current background to target roles, then turns your projects into a practical transition plan.</p>
+      <div className="mt-10 grid gap-4 md:grid-cols-2">
+        {careerCards.map(([from, to, Icon]) => (
+          <article className="module-card" key={from}>
+            <Icon className="module-icon" />
+            <h3>{from}</h3>
+            <p>{to}</p>
+          </article>
         ))}
       </div>
-    </div>
-  );
-}
-
-function Info({ title, items }) {
-  return (
-    <div>
-      <h4 className="text-xs font-bold uppercase text-muted-foreground">{title}</h4>
-      <ul className="mt-3 space-y-2">
-        {items.map((x) => (
-          <li key={x} className="flex gap-2 text-sm">
-            <Check className="mt-0.5 size-4 shrink-0 text-primary" />{x}
-          </li>
+      <div className="mt-9 flex flex-wrap gap-x-8 gap-y-4 text-sm text-muted-foreground">
+        {['System-design interviews', 'GitHub portfolio', 'Personal career plan'].map((text) => (
+          <span key={text} className="flex items-center gap-2"><Check className="size-4 text-primary" />{text}</span>
         ))}
-      </ul>
-    </div>
+      </div>
+    </section>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Career mapper — existing role → AI roles                            */
-/* ------------------------------------------------------------------ */
+function Projects() {
+  return (
+    <section id="projects" className="section page-width">
+      <div className="eyebrow">BUILD. DEPLOY. SHOW YOUR WORK.</div>
+      <h2 className="section-title mb-10">A portfolio. Not just a certificate.</h2>
+      {projects.map(([name, description], i) => (
+        <article className="project-row" key={name}>
+          <span className="font-mono text-sm text-primary">{String(i + 1).padStart(2, '0')}</span>
+          <h3>{name}{i === 4 && <span className="mt-2 block font-mono text-xs text-accent">CAPSTONE</span>}</h3>
+          <p>{description}</p>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function Faq() {
+  return (
+    <section id="faq" className="section page-width">
+      <div className="eyebrow">GOOD QUESTIONS. CLEAR ANSWERS.</div>
+      <h2 className="section-title mb-8">Before you start.</h2>
+      {faqs.map(([question, answer]) => (
+        <details className="faq-item" key={question}>
+          <summary>{question}</summary>
+          <p>{answer}</p>
+        </details>
+      ))}
+    </section>
+  );
+}
+
+function ClosingBand() {
+  return (
+    <section className="closing-band">
+      <div className="page-width flex flex-wrap items-center justify-between gap-8">
+        <div>
+          <div className="eyebrow">LESS THEORY. MORE SHIPPING.</div>
+          <h2 className="section-title">Build what comes next.</h2>
+          <p className="mt-4 text-sm text-muted-foreground">Your journey from AI user to AI engineer starts here.</p>
+        </div>
+        <ApplyButton />
+      </div>
+    </section>
+  );
+}
+
+function LandingFooter() {
+  const { user } = useAuth();
+  return (
+    <footer className="page-width flex flex-wrap items-center justify-between gap-5 py-8">
+      <Brand />
+      <nav className="flex flex-wrap items-center gap-6" aria-label="Footer navigation">
+        <Link to="/paths" className="nav-link">Paths</Link>
+        <Link to="/rankings" className="nav-link">Rankings</Link>
+        <Link to="/about" className="nav-link">About</Link>
+        <Link to={user ? '/app' : '/login'} className="nav-link">{user ? 'Dashboard' : 'Sign in'}</Link>
+      </nav>
+      <span className="font-mono text-[10px] text-muted-foreground">© 2026 CYBERVIE. ALL RIGHTS RESERVED.</span>
+      <a href="https://cybervie.com" target="_blank" rel="noreferrer" className={lp('link')}>cybervie.com <ArrowRight /></a>
+    </footer>
+  );
+}
+
+export default function Landing() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const previous = document.title;
+    document.title = 'CCAEP 2026 — Cybervie Certified AI Engineering Professional';
+    return () => { document.title = previous; };
+  }, []);
+
+  return (
+    <>
+      <div className="ccaep overflow-x-clip">
+        <LandingHeader />
+        <main>
+          <Hero />
+          <StatsStrip />
+          <ModuleGrid />
+          <DetailedCurriculum />
+          <CareerRoadmap />
+          <Careers />
+          <Projects />
+          <Faq />
+        </main>
+      </div>
+
+      {/* ======== Preserved sections, recolored to the CCAEP palette ======== */}
+      <div className="ace ace-ccaep">
+        <CareerMapper />
+        <ApplicationForm user={user} />
+      </div>
+
+      <div className="ccaep">
+        <ClosingBand />
+        <LandingFooter />
+      </div>
+    </>
+  );
+}
+
+/* ================================================================== */
+/* Preserved: career mapper — existing role → AI roles (unchanged)     */
+/* ================================================================== */
 function CareerMapper() {
   const [selected, setSelected] = useState(0);
   const item = careerMap[selected];
@@ -396,343 +554,9 @@ function CareerMapper() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Industry project lab                                                */
-/* ------------------------------------------------------------------ */
-function ProjectLab() {
-  const [industryIndex, setIndustryIndex] = useState(0);
-  const [projectIndex, setProjectIndex] = useState(0);
-  const industry = industries[industryIndex];
-  const project = industry?.projects[Math.min(projectIndex, industry.projects.length - 1)];
-  const chooseIndustry = (i) => { setIndustryIndex(i); setProjectIndex(0); };
-  if (!industry || !project) return null;
-
-  return (
-    <section id="projects" className="bg-background py-20 lg:py-28">
-      <div className="section-wrap">
-        <div className="max-w-4xl">
-          <p className="eyebrow text-primary">Industry Project Lab</p>
-          <h2 className="section-title mt-5">Build AI solutions around real industry problems.</h2>
-          <p className="mt-5 max-w-2xl text-muted-foreground">Not generic chatbot exercises. Each project moves from a business problem through architecture, technology, value, and career evidence.</p>
-        </div>
-
-        <div className="mt-12 flex overflow-x-auto border-b">
-          {industries.map((x, i) => (
-            <button
-              key={x.name}
-              onClick={() => chooseIndustry(i)}
-              className={`h-14 shrink-0 rounded-none border-b-2 px-5 text-sm font-medium transition-colors ${industryIndex === i ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              {x.short}
-            </button>
-          ))}
-        </div>
-
-        <div className="system-frame grid border-x border-b lg:grid-cols-[.67fr_1.33fr]">
-          <aside className="border-b bg-surface p-6 lg:border-b-0 lg:border-r lg:p-8">
-            <p className="eyebrow text-primary">{industry.name}</p>
-            <div className="mt-6 space-y-2">
-              {industry.projects.map((p, i) => (
-                <button
-                  key={p.title}
-                  onClick={() => setProjectIndex(i)}
-                  className={btn(projectIndex === i ? 'secondary' : 'ghost', 'default', 'h-auto min-h-[3rem] w-full justify-between whitespace-normal text-left')}
-                >
-                  {p.title}<ChevronRight />
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <article className="p-6 lg:p-10">
-            <span className="eyebrow text-muted-foreground">Enterprise project</span>
-            <h3 className="mt-3 text-3xl font-semibold">{project.title}</h3>
-            {project.note && (
-              <p className="mt-4 border-l-2 border-primary bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground">{project.note}</p>
-            )}
-            <div className="mt-8 grid gap-px overflow-hidden border bg-border sm:grid-cols-2">
-              <ProjectField number="01" title="Business problem" body={project.problem} />
-              <ProjectField number="02" title="AI solution" body={project.solution} />
-              <ProjectField number="03" title="Business value" body={project.value} />
-              <ProjectField number="04" title="Career roles demonstrated" body={project.roles.join(' · ')} />
-            </div>
-            <div className="mt-6 bg-ink p-6 text-primary-foreground">
-              <p className="eyebrow text-signal">Architecture</p>
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                {project.architecture.split(' → ').map((step, i, arr) => (
-                  <span key={step} className="contents">
-                    <span className="border hairline bg-primary-foreground/5 px-3 py-2 text-xs font-semibold">{step}</span>
-                    {i < arr.length - 1 && <ArrowRight className="size-4 text-signal" />}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-6 flex flex-wrap gap-2">
-                {project.technologies.map((t) => (
-                  <span key={t} className="rounded-sm bg-primary/20 px-2.5 py-1 text-xs text-signal">{t}</span>
-                ))}
-              </div>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ProjectField({ number, title, body }) {
-  return (
-    <div className="bg-card p-5">
-      <span className="text-xs font-bold text-primary">{number}</span>
-      <h4 className="mt-2 font-semibold">{title}</h4>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* 8-week program                                                      */
-/* ------------------------------------------------------------------ */
-function Program() {
-  const [active, setActive] = useState(0);
-  const week = weeks[active];
-  if (!week) return null;
-
-  return (
-    <section id="program" className="light-grid bg-surface py-20 lg:py-28">
-      <div className="section-wrap">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-          <div>
-            <p className="eyebrow text-primary">8-week program</p>
-            <h2 className="section-title mt-5">From transition map to professional portfolio.</h2>
-          </div>
-          <p className="max-w-md text-sm leading-6 text-muted-foreground">A focused two-month sequence that connects technical foundations, enterprise delivery, and your target role.</p>
-        </div>
-
-        <div className="system-frame mt-12 grid border bg-border lg:grid-cols-[.7fr_1.3fr]">
-          <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-1">
-            {weeks.map((w, i) => (
-              <button
-                key={w.title}
-                onClick={() => setActive(i)}
-                className={`h-auto min-h-[4rem] justify-start rounded-none px-5 text-left text-sm font-medium transition-colors ${active === i ? 'border-l-4 border-primary bg-card text-primary' : 'border-l-4 border-transparent bg-card text-foreground hover:bg-accent'}`}
-              >
-                <span className="data-label mr-2 text-xs text-muted-foreground">{String(i + 1).padStart(2, '0')}</span>
-                <span className="whitespace-normal">{w.title}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="bg-card p-7 lg:p-12">
-            <p className="eyebrow text-primary">Week {active + 1}</p>
-            <h3 className="mt-4 text-3xl font-semibold lg:text-4xl">{week.title}</h3>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              {week.topics.map((x) => (
-                <div key={x} className="flex items-center gap-3 border-b py-3 text-sm">
-                  <span className="size-1.5 bg-primary" />{x}
-                </div>
-              ))}
-            </div>
-            <div className="mt-10 border-l-2 border-primary bg-surface p-5">
-              <p className="eyebrow text-muted-foreground">Weekly deliverable</p>
-              <p className="mt-2 font-display text-xl font-semibold">{week.deliverable}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Learning tracks                                                     */
-/* ------------------------------------------------------------------ */
-function LearningTracks() {
-  return (
-    <section className="bg-background py-20 lg:py-28">
-      <div className="section-wrap">
-        <p className="eyebrow text-primary">Role-based learning tracks</p>
-        <h2 className="section-title mt-5 max-w-4xl">One program. Different professional destinations.</h2>
-        <div className="mt-12 grid gap-px border bg-border md:grid-cols-2 lg:grid-cols-3">
-          {tracks.map((t, i) => (
-            <article key={t.name} className="interactive-panel bg-card p-7">
-              <span className="data-label text-sm text-primary">0{i + 1}</span>
-              <h3 className="mt-10 text-2xl font-semibold">{t.name}</h3>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">{t.description}</p>
-              <div className="mt-7 border-t pt-5 text-xs font-semibold">{t.roles.slice(0, 3).join(' · ')} + more</div>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Portfolio                                                           */
-/* ------------------------------------------------------------------ */
-function Portfolio() {
-  return (
-    <section className="dark-grid bg-ink py-20 text-primary-foreground lg:py-28">
-      <div className="section-wrap grid gap-12 lg:grid-cols-[.85fr_1.15fr]">
-        <div>
-          <p className="eyebrow text-signal">Professional portfolio</p>
-          <h2 className="section-title mt-5">Leave with evidence of how you think and build.</h2>
-          <p className="mt-5 max-w-xl text-primary-foreground/65">Your final portfolio brings technical work and enterprise communication together for your target role.</p>
-        </div>
-        <div className="grid gap-px border hairline bg-line sm:grid-cols-2">
-          {[['01', 'Industry AI project'], ['02', 'Architecture diagram'], ['03', 'Business case'], ['04', 'Technical documentation'], ['05', 'Implementation roadmap'], ['06', 'Executive presentation']].map(([n, x]) => (
-            <div key={x} className="bg-ink-soft p-6">
-              <span className="text-xs text-signal">{n}</span>
-              <p className="mt-8 font-display text-lg font-semibold">{x}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="section-wrap mt-16 grid gap-px border-y hairline bg-line sm:grid-cols-4">
-        {['Learn', 'Build', 'Apply', 'Present'].map((x, i) => (
-          <div key={x} className="bg-ink py-6 text-center">
-            <span className="text-xs text-signal">0{i + 1}</span>
-            <p className="mt-1 font-display text-xl font-semibold">{x}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Project advisor — local recommender over the curriculum dataset     */
-/* (the Lovable version called a server AI function; this matches      */
-/*  keyword overlap against real program projects instead)             */
-/* ------------------------------------------------------------------ */
-const ALL_ROLES = tracks.flatMap((t) => t.roles);
-
-function recommendProject(industryName, desiredRole, experience) {
-  const industry = industries.find((i) => i.name === industryName) ?? industries[0];
-  const words = experience.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3);
-  let best = industry.projects[0];
-  let bestScore = -1;
-  for (const p of industry.projects) {
-    const hay = `${p.title} ${p.problem} ${p.solution} ${p.technologies.join(' ')} ${p.roles.join(' ')}`.toLowerCase();
-    const score = words.filter((w) => hay.includes(w)).length;
-    if (score > bestScore) { best = p; bestScore = score; }
-  }
-  const track = tracks.find((t) => t.roles.includes(desiredRole));
-  return {
-    title: best.title,
-    summary: best.solution,
-    businessProblem: best.problem,
-    architecture: best.architecture.split(' → '),
-    technologies: best.technologies,
-    deliverables: track?.deliverables ?? ['Working project', 'Architecture diagram', 'Business case'],
-    note: best.note || '',
-    whyItFits: `Your ${industryName} background maps directly onto this project's problem space. Completed well, it demonstrates ${best.roles.slice(0, 2).join(' and ')} capability — concrete evidence for a ${desiredRole} transition.`,
-  };
-}
-
-function ProjectAdvisor() {
-  const [industry, setIndustry] = useState(industries[0]?.name ?? '');
-  const [role, setRole] = useState(ALL_ROLES[0] ?? '');
-  const [experience, setExperience] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [rec, setRec] = useState(null);
-
-  function submit(e) {
-    e.preventDefault();
-    if (experience.trim().length < 10) return setError('Please describe your experience in a sentence or two.');
-    setLoading(true); setError(''); setRec(null);
-    // Small delay so the matching state is perceivable
-    setTimeout(() => {
-      setRec(recommendProject(industry, role, experience));
-      setLoading(false);
-    }, 700);
-  }
-
-  return (
-    <section id="project-advisor" className="section-divider bg-background py-20 lg:py-28">
-      <div className="section-wrap grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
-        <div>
-          <p className="eyebrow text-primary">AI project advisor</p>
-          <h2 className="section-title mt-5">Find the portfolio project that fits your transition.</h2>
-          <p className="mt-5 max-w-xl text-muted-foreground">Share your industry, experience, and target AI role. The advisor suggests a portfolio project you could build during the program.</p>
-          <form onSubmit={submit} className="mt-8 grid gap-4">
-            <label className="grid gap-2 text-sm font-medium">Industry
-              <select className={SELECT_CLS} value={industry} onChange={(e) => setIndustry(e.target.value)}>
-                {industries.map((i) => <option key={i.name}>{i.name}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-medium">Desired AI role
-              <select className={SELECT_CLS} value={role} onChange={(e) => setRole(e.target.value)}>
-                {ALL_ROLES.map((r) => <option key={r}>{r}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-medium">Professional experience
-              <textarea rows={4} maxLength={1500} value={experience} onChange={(e) => setExperience(e.target.value)} placeholder="e.g. 9 years as a business analyst in retail banking, working on loan origination workflows." className={`${FIELD_CLS} py-2`} />
-            </label>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <button type="submit" disabled={loading} className={btn('default', 'default', 'h-11 w-fit gap-2')}>
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {loading ? 'Designing your project…' : 'Recommend a project'}
-            </button>
-          </form>
-        </div>
-
-        <div className="border bg-card p-6 lg:p-8">
-          {!rec && !loading && <p className="text-sm text-muted-foreground">Your recommended project will appear here.</p>}
-          {loading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Matching your experience to an industry problem…</p>}
-          {rec && (
-            <div className="grid gap-6">
-              <div>
-                <p className="eyebrow text-primary">Recommended project</p>
-                <h3 className="mt-3 font-display text-2xl font-semibold">{rec.title}</h3>
-                <p className="mt-3 text-muted-foreground">{rec.summary}</p>
-                {rec.note && <p className="mt-3 border-l-2 border-primary bg-accent px-4 py-3 text-xs font-semibold text-accent-foreground">{rec.note}</p>}
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Business problem</p>
-                <p className="mt-2 text-sm">{rec.businessProblem}</p>
-              </div>
-              {rec.architecture.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Architecture</p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {rec.architecture.map((s, i) => (
-                      <span key={i} className="flex items-center gap-2 text-sm">
-                        <span className="border px-2 py-1">{s}</span>
-                        {i < rec.architecture.length - 1 && <ChevronRight className="size-4 text-primary" />}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {rec.technologies.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Technologies</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {rec.technologies.map((t) => <span key={t} className="bg-secondary px-2 py-1 text-xs">{t}</span>)}
-                  </div>
-                </div>
-              )}
-              {rec.deliverables.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Portfolio deliverables</p>
-                  <ul className="mt-2 list-disc pl-5 text-sm">{rec.deliverables.map((d) => <li key={d}>{d}</li>)}</ul>
-                </div>
-              )}
-              <div className="border-l-2 border-primary pl-4 text-sm text-muted-foreground">{rec.whyItFits}</div>
-              <p className="text-xs text-muted-foreground">Suggestion for educational planning. It does not guarantee admission, employment, or career outcomes.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Application form — posts to our backend /api/applications           */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* Preserved: application form — posts to /api/applications (unchanged) */
+/* ================================================================== */
 function ApplicationForm({ user }) {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);

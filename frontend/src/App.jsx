@@ -24,11 +24,13 @@ import Quiz from './pages/student/Quiz.jsx';
 import Rankings from './pages/student/Rankings.jsx';
 import Profile from './pages/student/Profile.jsx';
 import Assignments from './pages/student/Assignments.jsx';
+import Certificate from './pages/student/Certificate.jsx';
 
 import AdminDashboard from './pages/admin/AdminDashboard.jsx';
 import Colleges from './pages/admin/Colleges.jsx';
 import Questions from './pages/admin/Questions.jsx';
 import Users from './pages/admin/Users.jsx';
+import AdminCertificates from './pages/admin/Certificates.jsx';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -103,6 +105,7 @@ export default function App() {
             <Route path="rankings" element={<Rankings />} />
             <Route path="profile" element={<Profile />} />
             <Route path="assignments" element={<Assignments />} />
+            <Route path="certificate" element={<StudentRoute><Certificate /></StudentRoute>} />
             <Route path="users" element={<Users />} />
             <Route path="students" element={<Users />} />
           </Route>
@@ -112,6 +115,7 @@ export default function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="colleges" element={<Colleges />} />
             <Route path="users" element={<Users />} />
+            <Route path="certificates" element={<AdminCertificates />} />
             <Route path="questions" element={<Questions />} />
           </Route>
 

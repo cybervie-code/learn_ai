@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Building2, Users, FileQuestion,
+  LayoutDashboard, Building2, Users, FileQuestion, Award,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import BrandLogo from '../BrandLogo.jsx';
@@ -16,6 +16,7 @@ export default function AdminSidebar({ onNavigate }) {
       { to: '/admin/colleges', label: 'Colleges', icon: Building2 },
       { to: '/admin/users', label: 'Users', icon: Users },
     ] : []),
+    { to: '/admin/certificates', label: 'Certificates', icon: Award },
     { to: '/admin/questions', label: 'Question Bank', icon: FileQuestion },
   ];
 
