@@ -89,7 +89,6 @@ export async function googleLogin(idToken) {
 
   if (user) {
     attachCollegeIfWhitelisted(user, college);
-    assertPlatformAccess(user);
     user.lastLoginAt = new Date();
     await user.save();
     return { user, token: signToken(user._id) };
@@ -100,7 +99,6 @@ export async function googleLogin(idToken) {
   user = await User.findOne({ email: email.toLowerCase() });
   if (user) {
     attachCollegeIfWhitelisted(user, college);
-    assertPlatformAccess(user);
     user.externalIdentities = user.externalIdentities || [];
     if (!user.externalIdentities.some((i) => i.provider === 'google' && i.providerSubject === sub)) {
       user.externalIdentities.push(googleIdentity);
@@ -113,15 +111,14 @@ export async function googleLogin(idToken) {
     return { user, token: signToken(user._id) };
   }
 
-  // New user - only verified college domains may self-register via Google
-  if (!college) throw domainNotWhitelisted();
-
+  // New user - any Google account may sign up; users whose email domain
+  // matches a verified college are attached to it automatically.
   user = new User({
     email,
     name,
     avatarUrl,
     role: 'student',
-    college: college._id,
+    college: college ? college._id : null,
     status: 'active',
     emailVerified: true,
     externalIdentities: [googleIdentity],

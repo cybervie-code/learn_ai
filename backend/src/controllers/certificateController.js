@@ -15,6 +15,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const CERTIFICATES_DIR = path.join(__dirname, '../../public/certificates');
+const FIXED_ISSUE_DATE = new Date('2026-10-13T12:00:00Z');
 
 export async function requestCertificate(req, res, next) {
   try {
@@ -50,6 +51,7 @@ export async function requestCertificate(req, res, next) {
       student: user._id,
       studentName: displayName,
       studentEmail: user.email,
+      issueDate: FIXED_ISSUE_DATE,
       status: 'requested',
     });
 

@@ -264,7 +264,7 @@ export default function Login() {
                     />
                   </div>
                   <p className="text-xs text-subtle text-center mt-3">
-                    Students: sign in with your college Google account if your college is onboarded.
+                    Sign in with any Google account — Gmail works too.
                   </p>
                 </div>
               ) : (
