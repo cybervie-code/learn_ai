@@ -27,6 +27,9 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
+// Behind a proxy (Render, etc.) — needed for express-rate-limit to see real client IPs
+app.set('trust proxy', 1);
+
 // Security
 app.use(helmet());
 
